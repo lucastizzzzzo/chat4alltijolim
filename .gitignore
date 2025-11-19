@@ -66,6 +66,16 @@ coverage/
 
 # Demo outputs
 demo-output.log
+demo-conversation.sh
+
+# Helper scripts and extra docs (keep local only)
+git-setup.sh
+MANUAL_TESTS.md
+PROGRESS.md
+CHECKLIST.md
+COMMIT_GUIDE.md
+CONTRIBUTING.md
+docs/TDD_*.md
 
 # Course/project documentation (keep local only)
 esqueleto.md
