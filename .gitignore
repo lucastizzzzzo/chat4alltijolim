@@ -27,6 +27,11 @@ buildNumber.properties
 .classpath
 .project
 
+# Specify framework
+.specify/
+.github/agents/
+.github/prompts/
+
 # Logs
 *.log
 logs/
