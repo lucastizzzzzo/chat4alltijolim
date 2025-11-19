@@ -67,6 +67,12 @@ coverage/
 # Demo outputs
 demo-output.log
 
+# Course/project documentation (keep local only)
+esqueleto.md
+entrega1.md
+entrega2.md
+projeto.md
+
 # Build artifacts (keep source only)
 *.jar
 !.mvn/wrapper/maven-wrapper.jar
