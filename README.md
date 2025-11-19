@@ -155,10 +155,10 @@ curl -s -X GET "http://localhost:8082/v1/conversations/conv_demo_123/messages?li
 
 ```bash
 # End-to-end test (POST + Worker + Cassandra)
-./test-end-to-end.sh
+./scripts/test-end-to-end.sh
 
 # GET endpoint test (authentication + pagination)
-./test-get-messages.sh
+./scripts/test-get-messages.sh
 
 # Both tests should show:
 # ✓ ALL TESTS PASSED!
@@ -168,7 +168,7 @@ curl -s -X GET "http://localhost:8082/v1/conversations/conv_demo_123/messages?li
 
 ```bash
 # Complete demo with 6 messages exchanged
-./demo-simple.sh
+./scripts/demo-simple.sh
 ```
 
 **Expected Output:**
