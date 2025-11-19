@@ -1,0 +1,49 @@
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+docs/
+specs/
+README.md
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+
+# Build artifacts (will be rebuilt in container)
+target/
+*/target/
+
+# Logs
+*.log
+logs/
+
+# Environment files
+.env*
+*.env
+
+# Docker
+docker-compose.yml
+Dockerfile
+**/Dockerfile
+
+# Test files
+**/src/test/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Scripts
+scripts/
+
+# Temporary files
+*.tmp
+*.swp
+*.bak

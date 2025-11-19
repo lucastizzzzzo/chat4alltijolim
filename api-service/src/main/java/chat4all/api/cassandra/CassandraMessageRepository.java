@@ -1,0 +1,213 @@
+package chat4all.api.cassandra;
+
+import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.cql.PreparedStatement;
+import com.datastax.oss.driver.api.core.cql.ResultSet;
+import com.datastax.oss.driver.api.core.cql.Row;
+
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * CassandraMessageRepository - Repository para queries READ-ONLY de mensagens
+ * 
+ * PROPÓSITO EDUCACIONAL: Query-Driven Design + Pagination
+ * ==================
+ * 
+ * CASSANDRA QUERY PATTERNS:
+ * 
+ * PRIMARY KEY = (conversation_id, timestamp)
+ *   ↓
+ * Partition Key: conversation_id → Distribui dados entre nós
+ * Clustering Key: timestamp → Ordena dentro da partição
+ * 
+ * QUERY EFICIENTE:
+ * ```sql
+ * SELECT * FROM messages 
+ * WHERE conversation_id = 'conv_123'  ← Partition key (obrigatório!)
+ * ORDER BY timestamp ASC              ← Clustering key (grátis!)
+ * LIMIT 50;                           ← Pagination
+ * ```
+ * 
+ * QUERY INEFICIENTE (AVOID):
+ * ```sql
+ * SELECT * FROM messages 
+ * WHERE sender_id = 'user_a';  ← Não é partition key! (full scan)
+ * ```
+ * 
+ * PAGINATION STRATEGIES:
+ * 
+ * 1. LIMIT/OFFSET (implementado aqui para simplicidade):
+ *    - Simples de entender
+ *    - Problema: OFFSET alto = lento (Cassandra lê e descarta rows)
+ *    - OK para Fase 1 educacional
+ * 
+ * 2. CURSOR-BASED (produção real):
+ *    - Usa último timestamp como cursor
+ *    - WHERE timestamp > ? LIMIT 50
+ *    - Mais eficiente, sem OFFSET
+ * 
+ * @author Chat4All Educational Project
+ */
+public class CassandraMessageRepository {
+    
+    private final CqlSession session;
+    private final PreparedStatement getMessagesStatement;
+    
+    /**
+     * Cria repository com PreparedStatement
+     * 
+     * EDUCATIONAL NOTE: Pagination no Cassandra
+     * 
+     * Cassandra não tem OFFSET nativo!
+     * Para simular offset, lemos LIMIT + OFFSET rows e descartamos as primeiras OFFSET.
+     * 
+     * Produção real: usar paging state (cursor automático do driver).
+     * 
+     * @param session CqlSession do CassandraConnection
+     */
+    public CassandraMessageRepository(CqlSession session) {
+        this.session = session;
+        
+        // Query otimizada: usa partition key + clustering key
+        this.getMessagesStatement = session.prepare(
+            "SELECT conversation_id, timestamp, message_id, sender_id, content, status " +
+            "FROM messages " +
+            "WHERE conversation_id = ? " +
+            "ORDER BY timestamp ASC"
+            // LIMIT aplicado dinamicamente no bind
+        );
+        
+        System.out.println("✓ CassandraMessageRepository initialized");
+    }
+    
+    /**
+     * Busca mensagens de uma conversação com paginação
+     * 
+     * FLUXO:
+     * 1. Query Cassandra: WHERE conversation_id = ? ORDER BY timestamp
+     * 2. Fetch LIMIT + OFFSET rows (não há OFFSET nativo)
+     * 3. Descartar primeiras OFFSET rows (simula pagination)
+     * 4. Retornar até LIMIT rows
+     * 
+     * COMPLEXITY:
+     * - Best case (offset=0): O(limit)
+     * - Worst case (offset alto): O(limit + offset)
+     * 
+     * EDUCATIONAL NOTE: Cursor-based pagination seria O(limit) sempre:
+     * ```java
+     * WHERE conversation_id = ? AND timestamp > lastTimestamp LIMIT ?
+     * ```
+     * 
+     * FORMATO DE RETORNO:
+     * ```json
+     * [
+     *   {
+     *     "message_id": "msg_123",
+     *     "conversation_id": "conv_abc",
+     *     "sender_id": "user_a",
+     *     "content": "Hello!",
+     *     "timestamp": 1700000000000,
+     *     "status": "DELIVERED"
+     *   }
+     * ]
+     * ```
+     * 
+     * @param conversationId ID da conversação (partition key)
+     * @param limit Máximo de mensagens a retornar (default: 50, max: 100)
+     * @param offset Quantas mensagens pular (default: 0)
+     * @return Lista de mensagens como Maps (JSON-ready)
+     */
+    public List<Map<String, Object>> getMessages(String conversationId, int limit, int offset) {
+        List<Map<String, Object>> messages = new ArrayList<>();
+        
+        // Validação de parâmetros
+        if (conversationId == null || conversationId.trim().isEmpty()) {
+            throw new IllegalArgumentException("conversation_id cannot be null or empty");
+        }
+        
+        // Limites de segurança (evitar queries muito grandes)
+        int safeLimit = Math.min(Math.max(limit, 1), 100); // Entre 1 e 100
+        int safeOffset = Math.max(offset, 0); // >= 0
+        
+        try {
+            // Fetch limit + offset rows (Cassandra não tem OFFSET nativo)
+            int fetchSize = safeLimit + safeOffset;
+            
+            ResultSet rs = session.execute(getMessagesStatement.bind(conversationId));
+            
+            // Processar resultados
+            int rowIndex = 0;
+            for (Row row : rs) {
+                // Simular OFFSET: pular primeiras N rows
+                if (rowIndex < safeOffset) {
+                    rowIndex++;
+                    continue;
+                }
+                
+                // Parar após LIMIT rows
+                if (messages.size() >= safeLimit) {
+                    break;
+                }
+                
+                // Converter Row → Map (JSON-ready)
+                Map<String, Object> message = new HashMap<>();
+                message.put("message_id", row.getString("message_id"));
+                message.put("conversation_id", row.getString("conversation_id"));
+                message.put("sender_id", row.getString("sender_id"));
+                message.put("content", row.getString("content"));
+                message.put("status", row.getString("status"));
+                
+                // Timestamp: converter para epoch millis (compatível com frontend)
+                Instant timestamp = row.getInstant("timestamp");
+                if (timestamp != null) {
+                    message.put("timestamp", timestamp.toEpochMilli());
+                }
+                
+                messages.add(message);
+                rowIndex++;
+            }
+            
+            System.out.println("✓ Retrieved " + messages.size() + " messages for conversation " + conversationId +
+                             " (limit=" + safeLimit + ", offset=" + safeOffset + ")");
+            
+            return messages;
+            
+        } catch (Exception e) {
+            System.err.println("✗ Failed to retrieve messages for " + conversationId + ": " + e.getMessage());
+            throw new RuntimeException("Failed to query messages", e);
+        }
+    }
+    
+    /**
+     * Conta total de mensagens em uma conversação
+     * 
+     * EDUCATIONAL NOTE: COUNT Query Performance
+     * 
+     * Cassandra COUNT(*) é LENTO!
+     * - Precisa escanear toda a partição
+     * - Não há contador mágico pré-calculado
+     * 
+     * Produção real: manter counter separado em outra tabela
+     * ```sql
+     * CREATE TABLE conversation_stats (
+     *   conversation_id TEXT PRIMARY KEY,
+     *   message_count COUNTER
+     * );
+     * UPDATE conversation_stats SET message_count = message_count + 1 WHERE ...;
+     * ```
+     * 
+     * Fase 1: Simplificação - não implementamos count (client pode inferir se retornou < limit)
+     * 
+     * @param conversationId ID da conversação
+     * @return Total de mensagens (aproximado)
+     */
+    public long countMessages(String conversationId) {
+        // Simplified: retorna -1 (não implementado para Fase 1)
+        // Em produção: usar COUNTER table
+        return -1;
+    }
+}

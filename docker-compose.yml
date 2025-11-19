@@ -1,0 +1,251 @@
+# ============================================================================
+# Chat4All - Distributed Messaging Platform
+# Docker Compose Configuration
+# ============================================================================
+# Purpose: Local development and demonstration environment
+# Architecture: Event-driven microservices with Kafka + Cassandra
+# Scalability: Easily scale services with --scale flag
+# ============================================================================
+
+version: '3.8'
+
+services:
+  # ==========================================================================
+  # ZOOKEEPER
+  # ==========================================================================
+  # Purpose: Kafka coordination service (required by Kafka)
+  # Educational note: Zookeeper manages Kafka cluster metadata, leader election
+  # ==========================================================================
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: chat4all-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - chat4all-network
+
+  # ==========================================================================
+  # KAFKA
+  # ==========================================================================
+  # Purpose: Distributed message broker (event backbone)
+  # Educational notes:
+  # - Partitioning by conversation_id preserves message ordering per conversation
+  # - At-least-once delivery guarantee with manual commit
+  # - Horizontal scalability: add more brokers (not needed for Phase 1)
+  # ==========================================================================
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: chat4all-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_NUM_PARTITIONS: 3  # Educational: enables parallel processing across workers
+    networks:
+      - chat4all-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================================================
+  # CASSANDRA
+  # ==========================================================================
+  # Purpose: Distributed NoSQL database (message persistence)
+  # Educational notes:
+  # - Query-driven data modeling (partition key = conversation_id)
+  # - Eventual consistency acceptable for messaging
+  # - Horizontal scalability: add more nodes (simplified to 1 for Phase 1)
+  # ==========================================================================
+  cassandra:
+    image: cassandra:4.1
+    container_name: chat4all-cassandra
+    ports:
+      - "9042:9042"
+    environment:
+      CASSANDRA_CLUSTER_NAME: 'chat4all-cluster'
+      CASSANDRA_DC: 'dc1'
+      CASSANDRA_ENDPOINT_SNITCH: 'GossipingPropertyFileSnitch'
+      MAX_HEAP_SIZE: '512M'
+      HEAP_NEWSIZE: '128M'
+    volumes:
+      - cassandra-data:/var/lib/cassandra
+      - ./cassandra-init:/docker-entrypoint-initdb.d
+    networks:
+      - chat4all-network
+    healthcheck:
+      test: ["CMD-SHELL", "cqlsh -e 'describe cluster'"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # ==========================================================================
+  # CASSANDRA INIT
+  # ==========================================================================
+  # Purpose: Initialize Cassandra schema on first startup
+  # Educational notes:
+  # - Init container pattern: Runs once, then exits
+  # - Uses custom init.sh script with retry logic and verification
+  # - Application containers wait for this to complete (depends_on: condition: service_completed_successfully)
+  # ==========================================================================
+  cassandra-init:
+    image: cassandra:4.1
+    container_name: chat4all-cassandra-init
+    depends_on:
+      cassandra:
+        condition: service_healthy
+    volumes:
+      - ./cassandra-init:/docker-entrypoint-initdb.d
+    environment:
+      CASSANDRA_HOST: cassandra
+      CASSANDRA_PORT: 9042
+    command: ["bash", "/docker-entrypoint-initdb.d/init.sh"]
+    networks:
+      - chat4all-network
+
+  # ==========================================================================
+  # API SERVICE
+  # ==========================================================================
+  # Purpose: REST API - accepts requests, publishes to Kafka
+  # Characteristics: STATELESS (critical for horizontal scalability)
+  # Educational notes:
+  # - No local state → can scale horizontally without coordination
+  # - Load balancing: Docker Compose round-robin (production: nginx/HAProxy)
+  # - Scale with: docker-compose up --scale api-service=3
+  # ==========================================================================
+  api-service:
+    build:
+      context: .
+      dockerfile: api-service/Dockerfile
+    depends_on:
+      kafka:
+        condition: service_healthy
+      cassandra-init:
+        condition: service_completed_successfully
+    ports:
+      - "8080-8082:8080"  # Maps to random ports when scaling
+    environment:
+      # Kafka configuration
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_TOPIC_MESSAGES: messages
+      
+      # Cassandra configuration
+      CASSANDRA_CONTACT_POINTS: cassandra
+      CASSANDRA_PORT: 9042
+      CASSANDRA_KEYSPACE: chat4all
+      
+      # JWT configuration (static secret for Phase 1 - educational simplicity)
+      JWT_SECRET: 'chat4all-secret-key-change-in-production'
+      JWT_EXPIRATION_HOURS: 1
+      
+      # Service configuration
+      API_PORT: 8080
+      LOG_LEVEL: INFO
+    networks:
+      - chat4all-network
+    restart: on-failure
+
+  # ==========================================================================
+  # ROUTER WORKER
+  # ==========================================================================
+  # Purpose: Kafka consumer - processes messages and persists to Cassandra
+  # Characteristics: STATELESS (consumer group coordination via Kafka)
+  # Educational notes:
+  # - Consumer group: 'router-worker-group'
+  # - Kafka automatically distributes partitions across worker instances
+  # - Manual commit: ensures at-least-once delivery
+  # - Idempotency: deduplication by message_id
+  # - Scale with: docker-compose up --scale router-worker=3
+  # ==========================================================================
+  router-worker:
+    build:
+      context: .
+      dockerfile: router-worker/Dockerfile
+    depends_on:
+      kafka:
+        condition: service_healthy
+      cassandra-init:
+        condition: service_completed_successfully
+    environment:
+      # Kafka configuration
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_TOPIC_MESSAGES: messages
+      KAFKA_GROUP_ID: router-worker-group
+      KAFKA_AUTO_OFFSET_RESET: earliest
+      
+      # Cassandra configuration
+      CASSANDRA_CONTACT_POINTS: cassandra
+      CASSANDRA_PORT: 9042
+      CASSANDRA_KEYSPACE: chat4all
+      
+      # Worker configuration
+      LOG_LEVEL: INFO
+      RETRY_MAX_ATTEMPTS: 3
+      RETRY_BACKOFF_MS: 1000
+    networks:
+      - chat4all-network
+    restart: on-failure
+
+# ============================================================================
+# NETWORKS
+# ============================================================================
+# Isolate services in dedicated network for security
+# ============================================================================
+networks:
+  chat4all-network:
+    driver: bridge
+
+# ============================================================================
+# VOLUMES
+# ============================================================================
+# Persistent storage for Cassandra data
+# ============================================================================
+volumes:
+  cassandra-data:
+    driver: local
+
+# ============================================================================
+# USAGE INSTRUCTIONS
+# ============================================================================
+# Start all services:
+#   docker-compose up -d
+#
+# Scale services horizontally (demonstrates distributed systems concept):
+#   docker-compose up -d --scale api-service=3 --scale router-worker=3
+#
+# View logs:
+#   docker-compose logs -f api-service
+#   docker-compose logs -f router-worker
+#
+# Check Kafka consumer group status (partition assignment):
+#   docker-compose exec kafka kafka-consumer-groups \
+#     --bootstrap-server localhost:9092 \
+#     --group router-worker-group \
+#     --describe
+#
+# Access Cassandra CQL shell:
+#   docker-compose exec cassandra cqlsh
+#
+# Verify messages in Cassandra:
+#   docker-compose exec cassandra cqlsh -e \
+#     "SELECT * FROM chat4all.messages LIMIT 10;"
+#
+# Stop all services:
+#   docker-compose down
+#
+# Stop and remove volumes (reset all data):
+#   docker-compose down -v
+# ============================================================================
