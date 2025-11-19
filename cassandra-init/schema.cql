@@ -123,6 +123,47 @@ WITH comment = 'Users table - simplified for educational Phase 1';
 CREATE INDEX IF NOT EXISTS users_by_username ON users (username);
 
 -- ============================================================================
+-- FILES TABLE (Phase 2: Object Storage)
+-- ============================================================================
+-- Purpose: Store file metadata (binary data stored in MinIO)
+-- Partition key: file_id - unique identifier per file
+--
+-- Educational notes:
+-- - Separation of concerns: metadata in Cassandra, binary in MinIO
+-- - file_id links to MinIO object: {conversation_id}/{file_id}.{ext}
+-- - Enables queries: "Get file metadata", "List files in conversation"
+-- - Checksum for data integrity verification
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS files (
+    -- Partition key: unique file identifier
+    file_id TEXT PRIMARY KEY,
+    
+    -- Conversation context (for organization and queries)
+    conversation_id TEXT,
+    
+    -- Uploader information
+    uploader_id TEXT,
+    
+    -- File metadata
+    filename TEXT,
+    size_bytes BIGINT,
+    mimetype TEXT,
+    
+    -- Data integrity
+    checksum TEXT,  -- SHA256 hash
+    
+    -- MinIO storage reference
+    storage_path TEXT,  -- Format: {conversation_id}/{file_id}.{extension}
+    
+    -- Timestamp
+    uploaded_at TIMESTAMP
+)
+WITH comment = 'File metadata table - binary data stored in MinIO';
+
+-- Index for querying files by conversation
+CREATE INDEX IF NOT EXISTS files_by_conversation ON files (conversation_id);
+
+-- ============================================================================
 -- QUERY PATTERNS ENABLED BY THIS SCHEMA
 -- ============================================================================
 -- 1. Get all messages in a conversation (ordered by time):

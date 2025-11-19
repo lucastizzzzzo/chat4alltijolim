@@ -49,6 +49,13 @@
             <artifactId>json</artifactId>
         </dependency>
 
+        <!-- MinIO SDK (Object Storage - Phase 2) -->
+        <dependency>
+            <groupId>io.minio</groupId>
+            <artifactId>minio</artifactId>
+            <version>8.5.7</version>
+        </dependency>
+
         <!-- Logging -->
         <dependency>
             <groupId>org.slf4j</groupId>

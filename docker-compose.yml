@@ -93,6 +93,59 @@ services:
       start_period: 60s
 
   # ==========================================================================
+  # MINIO (Object Storage)
+  # ==========================================================================
+  # Purpose: S3-compatible object storage for files up to 2GB
+  # Educational notes:
+  # - Separation of concerns: metadata in Cassandra, binary data in MinIO
+  # - Presigned URLs: secure, time-limited download links (no API bottleneck)
+  # - Horizontal scalability: MinIO supports distributed mode (simplified to single node for Phase 1)
+  # ==========================================================================
+  minio:
+    image: minio/minio:latest
+    container_name: chat4all-minio
+    ports:
+      - "9000:9000"  # API port
+      - "9001:9001"  # Console UI port
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: password123
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - chat4all-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================================================
+  # MINIO INIT
+  # ==========================================================================
+  # Purpose: Create bucket and set access policy on first startup
+  # Educational notes:
+  # - Init container pattern: Creates "chat4all-files" bucket
+  # - Uses MinIO Client (mc) to configure bucket
+  # ==========================================================================
+  minio-init:
+    image: minio/mc:latest
+    container_name: chat4all-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 admin password123;
+      mc mb myminio/chat4all-files --ignore-existing;
+      mc anonymous set download myminio/chat4all-files;
+      echo 'MinIO bucket chat4all-files created successfully';
+      "
+    networks:
+      - chat4all-network
+
+  # ==========================================================================
   # CASSANDRA INIT
   # ==========================================================================
   # Purpose: Initialize Cassandra schema on first startup
@@ -135,6 +188,8 @@ services:
         condition: service_healthy
       cassandra-init:
         condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
     ports:
       - "8080-8082:8080"  # Maps to random ports when scaling
     environment:
@@ -146,6 +201,12 @@ services:
       CASSANDRA_CONTACT_POINTS: cassandra
       CASSANDRA_PORT: 9042
       CASSANDRA_KEYSPACE: chat4all
+      
+      # MinIO configuration (Phase 2)
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: admin
+      MINIO_SECRET_KEY: password123
+      MINIO_BUCKET: chat4all-files
       
       # JWT configuration (static secret for Phase 1 - educational simplicity)
       JWT_SECRET: 'chat4all-secret-key-change-in-production'
@@ -211,10 +272,12 @@ networks:
 # ============================================================================
 # VOLUMES
 # ============================================================================
-# Persistent storage for Cassandra data
+# Persistent storage for Cassandra data and MinIO object storage
 # ============================================================================
 volumes:
   cassandra-data:
+    driver: local
+  minio-data:
     driver: local
 
 # ============================================================================
