@@ -118,6 +118,49 @@ public class MessageEvent {
     private String eventType;
     
     /**
+     * File attachment ID (Phase 2: Object Storage)
+     * 
+     * OPTIONAL: Only present for messages with file attachments
+     * - NULL for text-only messages
+     * - Non-null for file messages (references files table)
+     * 
+     * FORMAT: UUID (e.g., "550e8400-e29b-41d4-a716-446655440000")
+     * 
+     * EDUCATIONAL NOTE: We store only the file_id, not the entire file.
+     * The file binary data is stored in MinIO (Object Storage).
+     * To download the file:
+     * 1. Query files table with file_id
+     * 2. Get storage_path from metadata
+     * 3. Generate presigned URL from MinIO
+     * 4. Return URL to client for direct download
+     */
+    private String fileId;
+    
+    /**
+     * File metadata (Phase 2: Object Storage)
+     * 
+     * OPTIONAL: Quick access to file info without joining files table
+     * - NULL for text-only messages
+     * - Contains: filename, size_bytes, mimetype, checksum
+     * 
+     * EDUCATIONAL NOTE: This is DENORMALIZATION for query performance.
+     * Instead of always joining messages + files tables, we embed commonly-needed
+     * metadata directly in the message record.
+     * 
+     * Trade-off: Slight data duplication vs. much faster queries
+     * (NoSQL principle: design for read performance)
+     * 
+     * EXAMPLE:
+     * {
+     *   "filename": "photo.jpg",
+     *   "size_bytes": "1048576",
+     *   "mimetype": "image/jpeg",
+     *   "checksum": "sha256:abc123..."
+     * }
+     */
+    private java.util.Map<String, String> fileMetadata;
+    
+    /**
      * Default constructor (required for JSON deserialization)
      * 
      * EDUCATIONAL NOTE: Jackson, Gson, and manual JSON parsers need a no-arg constructor
@@ -199,6 +242,22 @@ public class MessageEvent {
         this.eventType = eventType;
     }
     
+    public String getFileId() {
+        return fileId;
+    }
+    
+    public void setFileId(String fileId) {
+        this.fileId = fileId;
+    }
+    
+    public java.util.Map<String, String> getFileMetadata() {
+        return fileMetadata;
+    }
+    
+    public void setFileMetadata(java.util.Map<String, String> fileMetadata) {
+        this.fileMetadata = fileMetadata;
+    }
+    
     // ====================
     // JSON SERIALIZATION
     // ====================
@@ -230,6 +289,23 @@ public class MessageEvent {
         json.append("\"content\":\"").append(escapeJson(content)).append("\",");
         json.append("\"timestamp\":").append(timestamp).append(",");
         json.append("\"event_type\":\"").append(escapeJson(eventType)).append("\"");
+        
+        // Optional fields (Phase 2: file attachments)
+        if (fileId != null && !fileId.isEmpty()) {
+            json.append(",\"file_id\":\"").append(escapeJson(fileId)).append("\"");
+        }
+        if (fileMetadata != null && !fileMetadata.isEmpty()) {
+            json.append(",\"file_metadata\":{");
+            boolean first = true;
+            for (java.util.Map.Entry<String, String> entry : fileMetadata.entrySet()) {
+                if (!first) json.append(",");
+                json.append("\"").append(escapeJson(entry.getKey())).append("\":");
+                json.append("\"").append(escapeJson(entry.getValue())).append("\"");
+                first = false;
+            }
+            json.append("}");
+        }
+        
         json.append("}");
         return json.toString();
     }
@@ -264,6 +340,29 @@ public class MessageEvent {
         event.setContent(extractJsonValue(json, "content"));
         event.setTimestamp(Long.parseLong(extractJsonValueRaw(json, "timestamp")));
         event.setEventType(extractJsonValue(json, "event_type"));
+        
+        // Optional fields (Phase 2: file attachments)
+        String fileId = extractJsonValue(json, "file_id");
+        if (fileId != null && !fileId.isEmpty()) {
+            event.setFileId(fileId);
+        }
+        
+        // Extract file_metadata map if present
+        String fileMetadataJson = extractJsonObject(json, "file_metadata");
+        if (fileMetadataJson != null && !fileMetadataJson.isEmpty()) {
+            java.util.Map<String, String> metadata = new java.util.HashMap<>();
+            // Simple parser for {"key":"value","key2":"value2"}
+            String[] pairs = fileMetadataJson.split(",");
+            for (String pair : pairs) {
+                String[] kv = pair.split(":");
+                if (kv.length == 2) {
+                    String key = kv[0].trim().replace("\"", "");
+                    String value = kv[1].trim().replace("\"", "");
+                    metadata.put(key, unescapeJson(value));
+                }
+            }
+            event.setFileMetadata(metadata);
+        }
         
         // Validate required fields
         if (event.getMessageId() == null || event.getMessageId().isEmpty()) {
@@ -332,6 +431,46 @@ public class MessageEvent {
             return null;
         }
         return json.substring(startIndex, endIndex).trim();
+    }
+    
+    /**
+     * Extract JSON object value (Phase 2: for nested objects like file_metadata)
+     * 
+     * EXAMPLE: extractJsonObject('{"meta":{"key":"val"}}', "meta") -> '{"key":"val"}'
+     * 
+     * @param json JSON string
+     * @param fieldName Field name to extract
+     * @return JSON object content (without outer braces)
+     */
+    private static String extractJsonObject(String json, String fieldName) {
+        String pattern = "\"" + fieldName + "\":{";
+        int startIndex = json.indexOf(pattern);
+        if (startIndex == -1) {
+            return null; // Field not found
+        }
+        startIndex += pattern.length() - 1; // Include opening brace
+        
+        // Find matching closing brace
+        int braceCount = 0;
+        int endIndex = startIndex;
+        for (int i = startIndex; i < json.length(); i++) {
+            char c = json.charAt(i);
+            if (c == '{') braceCount++;
+            else if (c == '}') {
+                braceCount--;
+                if (braceCount == 0) {
+                    endIndex = i;
+                    break;
+                }
+            }
+        }
+        
+        if (endIndex == startIndex) {
+            return null; // No matching closing brace
+        }
+        
+        // Return content between braces (excluding the braces themselves)
+        return json.substring(startIndex + 1, endIndex);
     }
     
     /**

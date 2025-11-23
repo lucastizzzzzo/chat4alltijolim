@@ -50,6 +50,12 @@ CREATE TABLE IF NOT EXISTS messages (
     -- Phase 1 scope: SENT and DELIVERED only
     status TEXT,
     
+    -- File attachment support (Phase 2: Object Storage)
+    -- file_id: links to files table (NULL for text-only messages)
+    -- file_metadata: additional info (filename, size, mimetype) for quick access
+    file_id TEXT,
+    file_metadata MAP<TEXT, TEXT>,
+    
     -- Primary key: (partition_key, clustering_key)
     -- This structure enables:
     -- 1. Even data distribution by conversation_id
@@ -182,6 +188,10 @@ CREATE INDEX IF NOT EXISTS files_by_conversation ON files (conversation_id);
 --
 -- 5. Get conversation metadata:
 --    SELECT * FROM conversations WHERE conversation_id = ?;
+--
+-- 6. Get messages with file attachments:
+--    SELECT * FROM messages WHERE conversation_id = ? 
+--    AND file_id IS NOT NULL;
 -- ============================================================================
 
 -- ============================================================================

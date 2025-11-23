@@ -74,11 +74,11 @@ public class CassandraMessageStore {
     public CassandraMessageStore(CqlSession session) {
         this.session = session;
         
-        // Prepara INSERT statement
+        // Prepara INSERT statement (Phase 2: includes file_id and file_metadata)
         // EDUCATIONAL NOTE: ? são placeholders para parâmetros
         this.insertStatement = session.prepare(
-            "INSERT INTO messages (conversation_id, timestamp, message_id, sender_id, content, status) " +
-            "VALUES (?, ?, ?, ?, ?, ?)"
+            "INSERT INTO messages (conversation_id, timestamp, message_id, sender_id, content, status, file_id, file_metadata) " +
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
         );
         
         // Prepara UPDATE statement
@@ -133,18 +133,22 @@ public class CassandraMessageStore {
      */
     public boolean saveMessage(MessageEntity message) {
         try {
-            // Bind parâmetros ao PreparedStatement
+            // Bind parâmetros ao PreparedStatement (Phase 2: includes file fields)
             session.execute(insertStatement.bind(
                 message.getConversationId(),
                 message.getTimestamp(),
                 message.getMessageId(),
                 message.getSenderId(),
                 message.getContent(),
-                message.getStatus()
+                message.getStatus(),
+                message.getFileId(),         // Phase 2: file attachment
+                message.getFileMetadata()    // Phase 2: file metadata map
             ));
             
+            String fileInfo = message.getFileId() != null ? 
+                " [file: " + message.getFileId() + "]" : "";
             System.out.println("✓ Saved message: " + message.getMessageId() + 
-                             " (conv: " + message.getConversationId() + ")");
+                             " (conv: " + message.getConversationId() + ")" + fileInfo);
             return true;
             
         } catch (Exception e) {

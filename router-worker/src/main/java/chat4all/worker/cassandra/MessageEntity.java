@@ -53,6 +53,8 @@ public class MessageEntity {
     private final String senderId;
     private final String content;
     private String status;
+    private final String fileId; // Phase 2: File attachment support
+    private final java.util.Map<String, String> fileMetadata; // Phase 2: File metadata
     
     /**
      * Construtor completo
@@ -66,12 +68,32 @@ public class MessageEntity {
      */
     public MessageEntity(String conversationId, Instant timestamp, String messageId, 
                          String senderId, String content, String status) {
+        this(conversationId, timestamp, messageId, senderId, content, status, null, null);
+    }
+    
+    /**
+     * Construtor com suporte a anexos (Phase 2)
+     * 
+     * @param conversationId ID da conversação
+     * @param timestamp Momento de criação
+     * @param messageId ID único da mensagem
+     * @param senderId Quem enviou
+     * @param content Texto da mensagem
+     * @param status Status da mensagem
+     * @param fileId ID do arquivo anexado (opcional)
+     * @param fileMetadata Metadata do arquivo (opcional)
+     */
+    public MessageEntity(String conversationId, Instant timestamp, String messageId, 
+                         String senderId, String content, String status,
+                         String fileId, java.util.Map<String, String> fileMetadata) {
         this.conversationId = conversationId;
         this.timestamp = timestamp;
         this.messageId = messageId;
         this.senderId = senderId;
         this.content = content;
         this.status = status;
+        this.fileId = fileId;
+        this.fileMetadata = fileMetadata;
     }
     
     // Getters
@@ -98,6 +120,14 @@ public class MessageEntity {
     
     public String getStatus() {
         return status;
+    }
+    
+    public String getFileId() {
+        return fileId;
+    }
+    
+    public java.util.Map<String, String> getFileMetadata() {
+        return fileMetadata;
     }
     
     // Setter apenas para status (único campo mutável)

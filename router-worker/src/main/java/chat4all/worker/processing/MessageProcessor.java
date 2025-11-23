@@ -106,14 +106,16 @@ public class MessageProcessor {
                 return false; // Duplicada, mas não é erro (retorna success para commitar offset)
             }
             
-            // [2] PERSIST - Salvar mensagem com status SENT
+            // [2] PERSIST - Salvar mensagem com status SENT (Phase 2: includes file attachment)
             MessageEntity entity = new MessageEntity(
                 event.getConversationId(),
                 Instant.ofEpochMilli(event.getTimestamp()),
                 event.getMessageId(),
                 event.getSenderId(),
                 event.getContent(),
-                "SENT" // Status inicial
+                "SENT", // Status inicial
+                event.getFileId(), // Phase 2: file attachment
+                event.getFileMetadata() // Phase 2: file metadata
             );
             
             boolean saved = messageStore.saveMessage(entity);

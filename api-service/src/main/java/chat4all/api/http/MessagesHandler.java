@@ -4,8 +4,10 @@ import chat4all.api.auth.JwtAuthenticator;
 import chat4all.api.auth.JwtAuthenticationException;
 import chat4all.api.kafka.MessageProducer;
 import chat4all.api.messages.MessageValidator;
+import chat4all.api.repository.FileRepository;
 import chat4all.api.util.JsonParser;
 import chat4all.api.util.ValidationException;
+import chat4all.shared.FileEvent;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
@@ -70,6 +72,7 @@ public class MessagesHandler implements HttpHandler {
     private final MessageValidator validator;
     private final MessageProducer producer;
     private final JwtAuthenticator authenticator;
+    private final FileRepository fileRepository; // Phase 2: File attachment validation
     
     /**
      * Creates MessagesHandler
@@ -78,15 +81,18 @@ public class MessagesHandler implements HttpHandler {
      * - validator: Injected for testability (can mock in tests)
      * - producer: Injected for testability (can use test Kafka)
      * - authenticator: JWT validator for authentication
+     * - fileRepository: File metadata lookup (Phase 2)
      * 
      * @param validator Message validator
      * @param producer Kafka producer
      * @param authenticator JWT authenticator
+     * @param fileRepository File repository (Phase 2)
      */
-    public MessagesHandler(MessageValidator validator, MessageProducer producer, JwtAuthenticator authenticator) {
+    public MessagesHandler(MessageValidator validator, MessageProducer producer, JwtAuthenticator authenticator, FileRepository fileRepository) {
         this.validator = validator;
         this.producer = producer;
         this.authenticator = authenticator;
+        this.fileRepository = fileRepository;
     }
     
     /**
@@ -165,10 +171,41 @@ public class MessagesHandler implements HttpHandler {
             // 6. Validate message
             validator.validate(messageData);
             
-            // 7. Generate message_id (UUID v4 - random)
+            // 7. Phase 2: Handle file attachments
+            String messageType = (String) messageData.getOrDefault("type", "text");
+            String fileId = null;
+            Map<String, String> fileMetadata = null;
+            
+            if ("file".equals(messageType)) {
+                // Require file_id for file messages
+                fileId = (String) messageData.get("file_id");
+                if (fileId == null || fileId.trim().isEmpty()) {
+                    sendErrorResponse(exchange, 400, "file_id is required when type=file");
+                    return;
+                }
+                
+                // Validate file exists in database
+                java.util.Optional<FileEvent> fileEvent = fileRepository.findById(fileId);
+                if (!fileEvent.isPresent()) {
+                    sendErrorResponse(exchange, 400, "File not found: " + fileId);
+                    return;
+                }
+                
+                // Extract file metadata for quick access (denormalization)
+                FileEvent file = fileEvent.get();
+                fileMetadata = new HashMap<>();
+                fileMetadata.put("filename", file.getFilename());
+                fileMetadata.put("size_bytes", String.valueOf(file.getSizeBytes()));
+                fileMetadata.put("mimetype", file.getMimetype());
+                fileMetadata.put("checksum", file.getChecksum());
+                
+                System.out.println("[MessagesHandler] File attachment: " + fileId + " (" + file.getFilename() + ")");
+            }
+            
+            // 8. Generate message_id (UUID v4 - random)
             String messageId = "msg_" + UUID.randomUUID().toString().replace("-", "");
             
-            // 8. Build Kafka event payload
+            // 9. Build Kafka event payload
             Map<String, Object> kafkaEvent = new HashMap<>();
             kafkaEvent.put("message_id", messageId);
             kafkaEvent.put("conversation_id", messageData.get("conversation_id"));
@@ -176,6 +213,14 @@ public class MessagesHandler implements HttpHandler {
             kafkaEvent.put("content", messageData.get("content"));
             kafkaEvent.put("timestamp", System.currentTimeMillis());
             kafkaEvent.put("event_type", "MESSAGE_SENT");
+            
+            // Phase 2: Include file attachment if present
+            if (fileId != null) {
+                kafkaEvent.put("file_id", fileId);
+                if (fileMetadata != null) {
+                    kafkaEvent.put("file_metadata", fileMetadata);
+                }
+            }
             
             String kafkaEventJson = JsonParser.toJson(kafkaEvent);
             
