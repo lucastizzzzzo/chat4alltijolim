@@ -98,9 +98,14 @@ public class Main {
         CassandraMessageStore messageStore = new CassandraMessageStore(cassandraConnection.getSession());
         System.out.println();
         
+        // Initialize connector router (Phase 5: external platform routing)
+        System.out.println("▶ Initializing connector router...");
+        chat4all.worker.routing.ConnectorRouter connectorRouter = new chat4all.worker.routing.ConnectorRouter(kafkaBootstrap);
+        System.out.println("✓ ConnectorRouter initialized\n");
+        
         // Initialize message processor
         System.out.println("▶ Initializing message processor...");
-        MessageProcessor messageProcessor = new MessageProcessor(messageStore);
+        MessageProcessor messageProcessor = new MessageProcessor(messageStore, connectorRouter);
         System.out.println("✓ MessageProcessor initialized\n");
         
         // Initialize Kafka consumer
@@ -118,6 +123,8 @@ public class Main {
             System.out.println("\n⊗ Shutdown signal received");
             System.out.println("▶ Stopping consumer...");
             consumer.stop();
+            System.out.println("▶ Closing connector router...");
+            connectorRouter.close();
             System.out.println("▶ Closing Cassandra connection...");
             cassandraConnection.close();
             System.out.println("✓ Router Worker stopped gracefully");

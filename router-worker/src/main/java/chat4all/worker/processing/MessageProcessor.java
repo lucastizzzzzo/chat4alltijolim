@@ -3,6 +3,7 @@ package chat4all.worker.processing;
 import chat4all.shared.MessageEvent;
 import chat4all.worker.cassandra.CassandraMessageStore;
 import chat4all.worker.cassandra.MessageEntity;
+import chat4all.worker.routing.ConnectorRouter;
 
 import java.time.Instant;
 
@@ -47,14 +48,17 @@ import java.time.Instant;
 public class MessageProcessor {
     
     private final CassandraMessageStore messageStore;
+    private final ConnectorRouter connectorRouter;
     
     /**
      * Cria MessageProcessor
      * 
      * @param messageStore Store para persistir mensagens
+     * @param connectorRouter Router para conectores externos (WhatsApp, Instagram, etc.)
      */
-    public MessageProcessor(CassandraMessageStore messageStore) {
+    public MessageProcessor(CassandraMessageStore messageStore, ConnectorRouter connectorRouter) {
         this.messageStore = messageStore;
+        this.connectorRouter = connectorRouter;
     }
     
     /**
@@ -125,13 +129,29 @@ public class MessageProcessor {
             
             System.out.println("✓ [1/2] Saved with status=SENT");
             
-            // [3] SIMULATE DELIVERY - Simular latência de entrega
+            // [3] ROUTE OR DELIVER - Check if should route to external connector
+            String recipientId = event.getSenderId(); // Simplified: use sender_id as recipient
+            
+            if (connectorRouter != null && connectorRouter.shouldRouteToConnector(recipientId)) {
+                // Route to external connector (WhatsApp, Instagram, etc.)
+                boolean routed = connectorRouter.routeToConnector(event);
+                if (routed) {
+                    System.out.println("✓ [2/2] Routed to external connector");
+                    System.out.println("✓ Processing complete for message: " + messageId + " (routed to connector)");
+                    return true;
+                } else {
+                    System.err.println("⚠ Warning: Failed to route to connector, falling back to local delivery");
+                    // Fall through to local delivery
+                }
+            }
+            
+            // [4] LOCAL DELIVERY - Simular latência de entrega local
             // Em produção real: chamar API do serviço de push, SMS, etc.
             simulateDelivery(messageId);
             
             System.out.println("✓ [2/2] Simulated delivery");
             
-            // [4] UPDATE STATUS - Marcar como DELIVERED
+            // [5] UPDATE STATUS - Marcar como DELIVERED
             boolean updated = messageStore.updateMessageStatus(
                 messageId, 
                 entity.getConversationId(), 

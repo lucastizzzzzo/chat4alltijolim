@@ -261,6 +261,41 @@ services:
       - chat4all-network
     restart: on-failure
 
+  # ==========================================================================
+  # WHATSAPP CONNECTOR MOCK
+  # ==========================================================================
+  # Purpose: Simulates WhatsApp Business API integration
+  # Characteristics: STATELESS connector (consumer group coordination via Kafka)
+  # Educational notes:
+  # - Consumes from "whatsapp-outbound" Kafka topic
+  # - Publishes delivery status to "status-updates" topic
+  # - Demonstrates plugin/connector pattern for multi-platform messaging
+  # - Scales independently: can run multiple instances with consumer groups
+  # - Fault-tolerant: if connector crashes, messages remain in Kafka
+  # ==========================================================================
+  connector-whatsapp:
+    build:
+      context: .
+      dockerfile: connector-whatsapp/Dockerfile
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      # Kafka configuration
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_GROUP_ID: whatsapp-connector-group
+      KAFKA_TOPIC_INBOUND: whatsapp-outbound
+      KAFKA_TOPIC_STATUS: status-updates
+      
+      # Connector configuration
+      HEALTH_PORT: 8083
+      LOG_LEVEL: INFO
+    ports:
+      - "8083:8083"  # Health check endpoint
+    networks:
+      - chat4all-network
+    restart: on-failure
+
 # ============================================================================
 # NETWORKS
 # ============================================================================
