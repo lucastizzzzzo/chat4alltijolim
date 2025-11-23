@@ -4,11 +4,13 @@ import chat4all.api.auth.JwtAuthenticator;
 import chat4all.api.auth.TokenGenerator;
 import chat4all.api.cassandra.CassandraConnection;
 import chat4all.api.cassandra.CassandraMessageRepository;
+import chat4all.api.handler.FileUploadHandler;
 import chat4all.api.http.AuthHandler;
 import chat4all.api.http.ConversationsHandler;
 import chat4all.api.http.MessagesHandler;
 import chat4all.api.kafka.MessageProducer;
 import chat4all.api.messages.MessageValidator;
+import chat4all.api.repository.FileRepository;
 import com.sun.net.httpserver.HttpServer;
 
 import java.net.InetSocketAddress;
@@ -90,11 +92,13 @@ public class Main {
         // Cassandra connection for read queries (GET messages)
         CassandraConnection cassandraConnection = new CassandraConnection();
         CassandraMessageRepository messageRepository = new CassandraMessageRepository(cassandraConnection.getSession());
+        FileRepository fileRepository = new FileRepository(cassandraConnection.getSession());
         
         // 3. Create HTTP handlers
         AuthHandler authHandler = new AuthHandler(tokenGenerator);
         MessagesHandler messagesHandler = new MessagesHandler(messageValidator, messageProducer, jwtAuthenticator);
         ConversationsHandler conversationsHandler = new ConversationsHandler(messageRepository, jwtAuthenticator);
+        FileUploadHandler fileUploadHandler = new FileUploadHandler(fileRepository);
         
         // 4. Create and configure HTTP server
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
@@ -103,6 +107,7 @@ public class Main {
         server.createContext("/auth/token", authHandler);
         server.createContext("/v1/messages", messagesHandler);
         server.createContext("/v1/conversations/", conversationsHandler); // Note: trailing slash for path matching
+        server.createContext("/v1/files", fileUploadHandler);
         server.createContext("/health", exchange -> {
             String response = "{\"status\":\"UP\"}";
             exchange.getResponseHeaders().set("Content-Type", "application/json");
@@ -130,6 +135,7 @@ public class Main {
         System.out.println("  POST /auth/token                              - Authenticate and get JWT");
         System.out.println("  POST /v1/messages                             - Send message (requires JWT)");
         System.out.println("  GET  /v1/conversations/{id}/messages          - Get message history (requires JWT)");
+        System.out.println("  POST /v1/files                                - Upload file (requires JWT)");
         System.out.println("  GET  /health                                  - Health check");
         System.out.println("\nPress Ctrl+C to stop.");
     }
