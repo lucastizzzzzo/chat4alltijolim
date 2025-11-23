@@ -55,16 +55,16 @@
 
 **Purpose**: Generate secure temporary download URLs
 
-- [ ] T122 [US4] Create api-service/src/main/java/chat4all/api/storage/FileDownloadHandler.java class
-- [ ] T123 [US4] Implement FileDownloadHandler: GET /v1/files/{file_id}/download - query Cassandra files table for metadata
-- [ ] T124 [US4] Implement FileDownloadHandler.generatePresignedUrl(String storagePath) using MinioClient.getPresignedObjectUrl() with 1 hour expiry
-- [ ] T125 [US4] Return JSON response: {file_id, filename, size_bytes, mimetype, download_url, expires_at} (200 OK)
-- [ ] T126 [US4] Handle file not found: return 404 if file_id doesn't exist in Cassandra
-- [ ] T127 [US4] Register GET /v1/files/{file_id}/download endpoint in Main.java
-- [ ] T128 [P] [US4] Write test FileDownloadHandlerTest.testGeneratePresignedUrl() verifying URL contains signature parameter
-- [ ] T129 [P] [US4] Write test FileDownloadHandlerTest.testFileNotFound() expecting 404
-- [ ] T130 [US4] Create scripts/test-file-download.sh: upload file, get download URL, download via curl, verify checksum matches original
-- [ ] T131 [US4] Manual validation: generate URL, copy to browser, verify direct download from MinIO (no API proxy)
+- [X] T122 [US4] Create api-service/src/main/java/chat4all/api/storage/FileDownloadHandler.java class
+- [X] T123 [US4] Implement FileDownloadHandler: GET /v1/files/{file_id}/download - query Cassandra files table for metadata
+- [X] T124 [US4] Implement FileDownloadHandler.generatePresignedUrl(String storagePath) using MinioClient.getPresignedObjectUrl() with 1 hour expiry
+- [X] T125 [US4] Return JSON response: {file_id, filename, size_bytes, mimetype, download_url, expires_at} (200 OK)
+- [X] T126 [US4] Handle file not found: return 404 if file_id doesn't exist in Cassandra
+- [X] T127 [US4] Register GET /v1/files/{file_id}/download endpoint in Main.java
+- [X] T128 [P] [US4] Write test FileDownloadHandlerTest.testGeneratePresignedUrl() verifying URL contains signature parameter
+- [X] T129 [P] [US4] Write test FileDownloadHandlerTest.testFileNotFound() expecting 404
+- [X] T130 [US4] Create scripts/test-file-download.sh: upload file, get download URL, download via curl, verify checksum matches original
+- [X] T131 [US4] Manual validation: generate URL, copy to browser, verify direct download from MinIO (no API proxy)
 
 ---
 
