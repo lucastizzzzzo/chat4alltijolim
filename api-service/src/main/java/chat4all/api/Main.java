@@ -4,6 +4,7 @@ import chat4all.api.auth.JwtAuthenticator;
 import chat4all.api.auth.TokenGenerator;
 import chat4all.api.cassandra.CassandraConnection;
 import chat4all.api.cassandra.CassandraMessageRepository;
+import chat4all.api.handler.FileDownloadHandler;
 import chat4all.api.handler.FileUploadHandler;
 import chat4all.api.http.AuthHandler;
 import chat4all.api.http.ConversationsHandler;
@@ -99,6 +100,7 @@ public class Main {
         MessagesHandler messagesHandler = new MessagesHandler(messageValidator, messageProducer, jwtAuthenticator);
         ConversationsHandler conversationsHandler = new ConversationsHandler(messageRepository, jwtAuthenticator);
         FileUploadHandler fileUploadHandler = new FileUploadHandler(fileRepository);
+        FileDownloadHandler fileDownloadHandler = new FileDownloadHandler(fileRepository);
         
         // 4. Create and configure HTTP server
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
@@ -108,6 +110,7 @@ public class Main {
         server.createContext("/v1/messages", messagesHandler);
         server.createContext("/v1/conversations/", conversationsHandler); // Note: trailing slash for path matching
         server.createContext("/v1/files", fileUploadHandler);
+        server.createContext("/v1/files/", fileDownloadHandler); // Matches /v1/files/{id}/download
         server.createContext("/health", exchange -> {
             String response = "{\"status\":\"UP\"}";
             exchange.getResponseHeaders().set("Content-Type", "application/json");
@@ -136,6 +139,7 @@ public class Main {
         System.out.println("  POST /v1/messages                             - Send message (requires JWT)");
         System.out.println("  GET  /v1/conversations/{id}/messages          - Get message history (requires JWT)");
         System.out.println("  POST /v1/files                                - Upload file (requires JWT)");
+        System.out.println("  GET  /v1/files/{id}/download                  - Get download URL (requires JWT)");
         System.out.println("  GET  /health                                  - Health check");
         System.out.println("\nPress Ctrl+C to stop.");
     }

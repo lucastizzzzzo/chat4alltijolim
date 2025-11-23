@@ -129,6 +129,47 @@ public class MinioClientFactory {
     }
     
     /**
+     * Create a client configured for external/presigned URL generation
+     * 
+     * Educational note: Why separate client for presigned URLs?
+     * - Presigned URLs embed the endpoint hostname in the signature
+     * - Internal endpoints (minio:9000) don't work for external clients
+     * - External endpoints (localhost:9000) work from outside Docker
+     * - S3 signature algorithm includes Host header in HMAC calculation
+     * 
+     * Problem: Can't just replace hostname in generated URL
+     * - Signature was calculated with internal hostname
+     * - Changing hostname invalidates signature → 403 Forbidden
+     * 
+     * Solution: Generate URLs with external endpoint from the start
+     * - Configure client with MINIO_EXTERNAL_ENDPOINT
+     * - Signature will be valid for external access
+     * - URLs work from browser, curl, etc.
+     * 
+     * @return MinioClient configured for external access
+     */
+    public static MinioClient getExternalClient() {
+        String externalEndpoint = getEnvOrDefault("MINIO_EXTERNAL_ENDPOINT", MINIO_ENDPOINT);
+        
+        try {
+            MinioClient externalClient = MinioClient.builder()
+                    .endpoint(externalEndpoint)
+                    .credentials(MINIO_ACCESS_KEY, MINIO_SECRET_KEY)
+                    .build();
+            
+            System.out.println("[MinioClientFactory] External client created for presigned URLs");
+            System.out.println("[MinioClientFactory] External endpoint: " + externalEndpoint);
+            
+            return externalClient;
+            
+        } catch (Exception e) {
+            String errorMsg = "Failed to create external MinIO client: " + e.getMessage();
+            System.err.println("[MinioClientFactory] ERROR: " + errorMsg);
+            throw new IllegalStateException(errorMsg, e);
+        }
+    }
+    
+    /**
      * Reset singleton instance (for testing only)
      * 
      * Warning: Not thread-safe, only use in tests
