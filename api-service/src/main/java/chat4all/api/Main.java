@@ -98,7 +98,7 @@ public class Main {
         // 3. Create HTTP handlers
         AuthHandler authHandler = new AuthHandler(tokenGenerator);
         MessagesHandler messagesHandler = new MessagesHandler(messageValidator, messageProducer, jwtAuthenticator, fileRepository);
-        ConversationsHandler conversationsHandler = new ConversationsHandler(messageRepository, jwtAuthenticator);
+        ConversationsHandler conversationsHandler = new ConversationsHandler(messageRepository, jwtAuthenticator, fileRepository);
         FileUploadHandler fileUploadHandler = new FileUploadHandler(fileRepository);
         FileDownloadHandler fileDownloadHandler = new FileDownloadHandler(fileRepository);
         

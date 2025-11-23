@@ -72,9 +72,9 @@ public class CassandraMessageRepository {
     public CassandraMessageRepository(CqlSession session) {
         this.session = session;
         
-        // Query otimizada: usa partition key + clustering key
+        // Query otimizada: usa partition key + clustering key (Phase 2: includes file fields)
         this.getMessagesStatement = session.prepare(
-            "SELECT conversation_id, timestamp, message_id, sender_id, content, status " +
+            "SELECT conversation_id, timestamp, message_id, sender_id, content, status, file_id, file_metadata " +
             "FROM messages " +
             "WHERE conversation_id = ? " +
             "ORDER BY timestamp ASC"
@@ -165,6 +165,18 @@ public class CassandraMessageRepository {
                 Instant timestamp = row.getInstant("timestamp");
                 if (timestamp != null) {
                     message.put("timestamp", timestamp.toEpochMilli());
+                }
+                
+                // Phase 2: File attachment metadata
+                String fileId = row.getString("file_id");
+                if (fileId != null && !fileId.isEmpty()) {
+                    message.put("file_id", fileId);
+                    
+                    // File metadata map
+                    Map<String, String> fileMetadata = row.getMap("file_metadata", String.class, String.class);
+                    if (fileMetadata != null && !fileMetadata.isEmpty()) {
+                        message.put("file_metadata", fileMetadata);
+                    }
                 }
                 
                 messages.add(message);

@@ -3,9 +3,15 @@ package chat4all.api.http;
 import chat4all.api.auth.JwtAuthenticator;
 import chat4all.api.auth.JwtAuthenticationException;
 import chat4all.api.cassandra.CassandraMessageRepository;
+import chat4all.api.repository.FileRepository;
+import chat4all.api.storage.MinioClientFactory;
 import chat4all.api.util.JsonParser;
+import chat4all.shared.FileEvent;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
+import io.minio.GetPresignedObjectUrlArgs;
+import io.minio.MinioClient;
+import io.minio.http.Method;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -68,10 +74,14 @@ public class ConversationsHandler implements HttpHandler {
     
     private final CassandraMessageRepository repository;
     private final JwtAuthenticator authenticator;
+    private final FileRepository fileRepository; // Phase 2: File attachment support
+    private final MinioClient minioClient; // Phase 2: Presigned URL generation
     
-    public ConversationsHandler(CassandraMessageRepository repository, JwtAuthenticator authenticator) {
+    public ConversationsHandler(CassandraMessageRepository repository, JwtAuthenticator authenticator, FileRepository fileRepository) {
         this.repository = repository;
         this.authenticator = authenticator;
+        this.fileRepository = fileRepository;
+        this.minioClient = MinioClientFactory.getInstance();
     }
     
     /**
@@ -168,6 +178,38 @@ public class ConversationsHandler implements HttpHandler {
             
             // 5. Query Cassandra
             List<Map<String, Object>> messages = repository.getMessages(conversationId, limit, offset);
+            
+            // Phase 2: Generate presigned URLs for file attachments
+            for (Map<String, Object> message : messages) {
+                String fileId = (String) message.get("file_id");
+                if (fileId != null && !fileId.isEmpty()) {
+                    try {
+                        // Query file metadata from files table
+                        java.util.Optional<FileEvent> fileEventOpt = fileRepository.findById(fileId);
+                        if (fileEventOpt.isPresent()) {
+                            FileEvent fileEvent = fileEventOpt.get();
+                            
+                            // Generate presigned download URL (1 hour expiry)
+                            String downloadUrl = minioClient.getPresignedObjectUrl(
+                                GetPresignedObjectUrlArgs.builder()
+                                    .method(Method.GET)
+                                    .bucket(MinioClientFactory.getBucketName())
+                                    .object(fileEvent.getStoragePath())
+                                    .expiry(1, java.util.concurrent.TimeUnit.HOURS)
+                                    .build()
+                            );
+                            
+                            // Add download URL to message
+                            message.put("file_download_url", downloadUrl);
+                            
+                            System.out.println("[ConversationsHandler] Generated presigned URL for file: " + fileId);
+                        }
+                    } catch (Exception e) {
+                        System.err.println("[ConversationsHandler] Failed to generate presigned URL for file " + fileId + ": " + e.getMessage());
+                        // Continue processing other messages (non-critical error)
+                    }
+                }
+            }
             
             // 6. Build response
             Map<String, Object> response = new HashMap<>();
