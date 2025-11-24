@@ -195,6 +195,79 @@ public class CassandraMessageRepository {
     }
     
     /**
+     * Get message by ID (Phase 8: Status Lifecycle)
+     * 
+     * @param messageId Message ID to query
+     * @return Map with message data, or null if not found
+     */
+    public Map<String, Object> getMessageById(String messageId) {
+        String query = "SELECT conversation_id, timestamp, message_id, sender_id, content, status, " +
+                      "delivered_at, read_at, file_id, file_metadata " +
+                      "FROM chat4all.messages WHERE message_id = ? ALLOW FILTERING";
+        
+        PreparedStatement statement = session.prepare(query);
+        ResultSet resultSet = session.execute(statement.bind(messageId));
+        Row row = resultSet.one();
+        
+        if (row == null) {
+            return null;
+        }
+        
+        Map<String, Object> message = new HashMap<>();
+        message.put("conversation_id", row.getString("conversation_id"));
+        message.put("timestamp", row.getInstant("timestamp"));
+        message.put("message_id", row.getString("message_id"));
+        message.put("sender_id", row.getString("sender_id"));
+        message.put("content", row.getString("content"));
+        message.put("status", row.getString("status"));
+        message.put("delivered_at", row.getInstant("delivered_at"));
+        message.put("read_at", row.getInstant("read_at"));
+        message.put("file_id", row.getString("file_id"));
+        
+        return message;
+    }
+    
+    /**
+     * Update message status to READ (Phase 8: Status Lifecycle)
+     * 
+     * EDUCATIONAL NOTE: Two-step process required for Cassandra
+     * 1. Query by message_id (secondary index) to get full primary key
+     * 2. Update using conversation_id + timestamp (partition + clustering key)
+     * 
+     * @param messageId Message ID to update
+     * @param status New status ("READ")
+     * @param readAt Read timestamp (epoch millis)
+     */
+    public void updateMessageStatus(String messageId, String status, long readAt) {
+        // Step 1: Query to get primary key components
+        String selectQuery = "SELECT conversation_id, timestamp FROM chat4all.messages " +
+                           "WHERE message_id = ? ALLOW FILTERING";
+        PreparedStatement selectStmt = session.prepare(selectQuery);
+        ResultSet resultSet = session.execute(selectStmt.bind(messageId));
+        Row row = resultSet.one();
+        
+        if (row == null) {
+            System.err.println("✗ Message not found: " + messageId);
+            return;
+        }
+        
+        String conversationId = row.getString("conversation_id");
+        Instant messageTimestamp = row.getInstant("timestamp");
+        
+        // Step 2: Update using full primary key
+        String update = "UPDATE chat4all.messages " +
+                       "SET status = ?, read_at = ? " +
+                       "WHERE conversation_id = ? AND timestamp = ?";
+        
+        PreparedStatement updateStmt = session.prepare(update);
+        Instant readAtInstant = Instant.ofEpochMilli(readAt);
+        
+        session.execute(updateStmt.bind(status, readAtInstant, conversationId, messageTimestamp));
+        
+        System.out.println("✓ Updated message status: " + messageId + " → " + status);
+    }
+    
+    /**
      * Conta total de mensagens em uma conversação
      * 
      * EDUCATIONAL NOTE: COUNT Query Performance

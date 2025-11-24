@@ -210,6 +210,12 @@ public class MessagesHandler implements HttpHandler {
             kafkaEvent.put("message_id", messageId);
             kafkaEvent.put("conversation_id", messageData.get("conversation_id"));
             kafkaEvent.put("sender_id", messageData.get("sender_id"));
+            
+            // Phase 5: Add recipient_id if provided (for external connector routing)
+            if (messageData.containsKey("recipient_id")) {
+                kafkaEvent.put("recipient_id", messageData.get("recipient_id"));
+            }
+            
             kafkaEvent.put("content", messageData.get("content"));
             kafkaEvent.put("timestamp", System.currentTimeMillis());
             kafkaEvent.put("event_type", "MESSAGE_SENT");

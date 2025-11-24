@@ -72,10 +72,16 @@ demo-conversation.sh
 git-setup.sh
 MANUAL_TESTS.md
 PROGRESS.md
+PROGRESS_OLD.md
+PROGRESS_FINAL.md
 CHECKLIST.md
 COMMIT_GUIDE.md
 CONTRIBUTING.md
 docs/TDD_*.md
+
+# Status tracking files (temporary)
+STATUS.md
+STATUS_CURRENT.md
 
 # Course/project documentation (keep local only)
 esqueleto.md

@@ -50,6 +50,12 @@ CREATE TABLE IF NOT EXISTS messages (
     -- Phase 1 scope: SENT and DELIVERED only
     status TEXT,
     
+    -- Status timestamps (Phase 7: Status Lifecycle)
+    -- delivered_at: when connector confirmed delivery
+    -- read_at: when recipient marked as read
+    delivered_at TIMESTAMP,
+    read_at TIMESTAMP,
+    
     -- File attachment support (Phase 2: Object Storage)
     -- file_id: links to files table (NULL for text-only messages)
     -- file_metadata: additional info (filename, size, mimetype) for quick access

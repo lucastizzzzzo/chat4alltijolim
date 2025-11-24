@@ -1,5 +1,5 @@
 # ============================================================================
-# WhatsApp Connector Mock - Dockerfile
+# Instagram Connector Mock - Dockerfile
 # ============================================================================
 # Purpose: Package connector as lightweight Docker image
 # Base Image: Eclipse Temurin JRE 17 Alpine (minimal footprint)
@@ -18,14 +18,15 @@ COPY pom.xml .
 COPY shared/ shared/
 
 # Copy connector source
-COPY connector-whatsapp/ connector-whatsapp/
+COPY connector-instagram/ connector-instagram/
 
 # Copy other module POMs (needed for reactor build)
 COPY api-service/pom.xml api-service/pom.xml
 COPY router-worker/pom.xml router-worker/pom.xml
+COPY connector-whatsapp/pom.xml connector-whatsapp/pom.xml
 
-# Build only connector-whatsapp module
-RUN mvn clean package -DskipTests -pl connector-whatsapp -am
+# Build only connector-instagram module
+RUN mvn clean package -DskipTests -pl connector-instagram -am
 
 # ============================================================================
 # STAGE 2: RUNTIME
@@ -38,7 +39,7 @@ RUN addgroup -S chat4all && adduser -S chat4all -G chat4all
 WORKDIR /app
 
 # Copy JAR from build stage
-COPY --from=build /app/connector-whatsapp/target/connector-whatsapp-1.0.0-SNAPSHOT.jar app.jar
+COPY --from=build /app/connector-instagram/target/connector-instagram-1.0.0-SNAPSHOT.jar app.jar
 
 # Change ownership
 RUN chown -R chat4all:chat4all /app
@@ -47,7 +48,7 @@ RUN chown -R chat4all:chat4all /app
 USER chat4all
 
 # Expose health check port
-EXPOSE 8083
+EXPOSE 8084
 
 # JVM options for container environment
 ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"

@@ -74,6 +74,25 @@ public class MessageEvent {
     private String senderId;
     
     /**
+     * User/Platform ID of the recipient (Phase 5: External Connectors)
+     * 
+     * OPTIONAL: Used for routing to external platforms
+     * - NULL or empty: Local delivery (same as sender_id logic)
+     * - "whatsapp:+5511999999999": Route to WhatsApp connector
+     * - "instagram:@username": Route to Instagram connector
+     * - "user_alice": Local delivery to user_alice
+     * 
+     * EDUCATIONAL NOTE: This enables multi-platform messaging.
+     * The router-worker checks the prefix to determine where to send:
+     * - "whatsapp:" → whatsapp-outbound Kafka topic → WhatsAppConnector
+     * - "instagram:" → instagram-outbound Kafka topic → InstagramConnector
+     * - Other → local delivery simulation
+     * 
+     * FORMAT: "<platform>:<platform_user_id>" or "user_<username>"
+     */
+    private String recipientId;
+    
+    /**
      * Message content (text)
      * 
      * VALIDATION:
@@ -218,6 +237,14 @@ public class MessageEvent {
         this.senderId = senderId;
     }
     
+    public String getRecipientId() {
+        return recipientId;
+    }
+    
+    public void setRecipientId(String recipientId) {
+        this.recipientId = recipientId;
+    }
+    
     public String getContent() {
         return content;
     }
@@ -286,9 +313,15 @@ public class MessageEvent {
         json.append("\"message_id\":\"").append(escapeJson(messageId)).append("\",");
         json.append("\"conversation_id\":\"").append(escapeJson(conversationId)).append("\",");
         json.append("\"sender_id\":\"").append(escapeJson(senderId)).append("\",");
+        
+        // Optional: recipient_id (Phase 5: external connectors)
+        if (recipientId != null && !recipientId.isEmpty()) {
+            json.append("\"recipient_id\":\"").append(escapeJson(recipientId)).append("\",");
+        }
+        
         json.append("\"content\":\"").append(escapeJson(content)).append("\",");
         json.append("\"timestamp\":").append(timestamp).append(",");
-        json.append("\"event_type\":\"").append(escapeJson(eventType)).append("\"");
+        json.append("\"event_type\":\"").append(escapeJson(eventType)).append("\"");;
         
         // Optional fields (Phase 2: file attachments)
         if (fileId != null && !fileId.isEmpty()) {
@@ -337,6 +370,10 @@ public class MessageEvent {
         event.setMessageId(extractJsonValue(json, "message_id"));
         event.setConversationId(extractJsonValue(json, "conversation_id"));
         event.setSenderId(extractJsonValue(json, "sender_id"));
+        
+        // Optional: recipient_id (Phase 5)
+        event.setRecipientId(extractJsonValue(json, "recipient_id"));
+        
         event.setContent(extractJsonValue(json, "content"));
         event.setTimestamp(Long.parseLong(extractJsonValueRaw(json, "timestamp")));
         event.setEventType(extractJsonValue(json, "event_type"));

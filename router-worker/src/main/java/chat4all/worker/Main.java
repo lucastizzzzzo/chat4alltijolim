@@ -4,6 +4,7 @@ import chat4all.worker.cassandra.CassandraConnection;
 import chat4all.worker.cassandra.CassandraMessageStore;
 import chat4all.worker.kafka.KafkaMessageConsumer;
 import chat4all.worker.processing.MessageProcessor;
+import chat4all.worker.status.StatusUpdateConsumer;
 
 /**
  * Main - Router Worker Entry Point
@@ -85,11 +86,15 @@ public class Main {
         String kafkaBootstrap = System.getenv().getOrDefault("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092");
         String kafkaTopic = System.getenv().getOrDefault("KAFKA_TOPIC_MESSAGES", "messages");
         String kafkaGroupId = System.getenv().getOrDefault("KAFKA_GROUP_ID", "router-worker-group");
+        String statusTopic = System.getenv().getOrDefault("KAFKA_TOPIC_STATUS", "status-updates");
+        String statusGroupId = System.getenv().getOrDefault("KAFKA_STATUS_GROUP_ID", "status-consumer-group");
         
         System.out.println("Configuration:");
         System.out.println("  Kafka: " + kafkaBootstrap);
-        System.out.println("  Topic: " + kafkaTopic);
-        System.out.println("  Group: " + kafkaGroupId);
+        System.out.println("  Messages Topic: " + kafkaTopic);
+        System.out.println("  Messages Group: " + kafkaGroupId);
+        System.out.println("  Status Topic: " + statusTopic);
+        System.out.println("  Status Group: " + statusGroupId);
         System.out.println("===========================================\n");
         
         // Initialize Cassandra connection
@@ -118,11 +123,35 @@ public class Main {
         );
         System.out.println();
         
+        // Initialize Status Update Consumer (Phase 7: Status Lifecycle)
+        System.out.println("▶ Initializing status update consumer...");
+        StatusUpdateConsumer statusConsumer = new StatusUpdateConsumer(
+            kafkaBootstrap,
+            statusGroupId,
+            statusTopic,
+            cassandraConnection
+        );
+        System.out.println();
+        
+        // Start status consumer in separate thread
+        Thread statusConsumerThread = new Thread(() -> {
+            statusConsumer.run();
+        }, "status-consumer-thread");
+        statusConsumerThread.start();
+        System.out.println("✓ Status consumer thread started\n");
+        
         // Register shutdown hook for graceful cleanup
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             System.out.println("\n⊗ Shutdown signal received");
-            System.out.println("▶ Stopping consumer...");
+            System.out.println("▶ Stopping message consumer...");
             consumer.stop();
+            System.out.println("▶ Stopping status consumer...");
+            statusConsumer.shutdown();
+            try {
+                statusConsumerThread.join(5000); // Wait max 5s
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
             System.out.println("▶ Closing connector router...");
             connectorRouter.close();
             System.out.println("▶ Closing Cassandra connection...");

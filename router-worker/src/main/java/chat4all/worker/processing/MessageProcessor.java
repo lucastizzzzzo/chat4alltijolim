@@ -129,14 +129,25 @@ public class MessageProcessor {
             
             System.out.println("✓ [1/2] Saved with status=SENT");
             
+            // DEBUG: Check what we have
+            System.out.println("[DEBUG] recipient_id from event: " + event.getRecipientId());
+            System.out.println("[DEBUG] sender_id from event: " + event.getSenderId());
+            
             // [3] ROUTE OR DELIVER - Check if should route to external connector
-            String recipientId = event.getSenderId(); // Simplified: use sender_id as recipient
+            // Use recipient_id if present, otherwise fall back to sender_id (for backward compatibility)
+            String recipientId = event.getRecipientId();
+            if (recipientId == null || recipientId.isEmpty()) {
+                recipientId = event.getSenderId(); // Backward compatibility
+                System.out.println("[DEBUG] Using fallback sender_id: " + recipientId);
+            } else {
+                System.out.println("[DEBUG] Using recipient_id: " + recipientId);
+            }
             
             if (connectorRouter != null && connectorRouter.shouldRouteToConnector(recipientId)) {
                 // Route to external connector (WhatsApp, Instagram, etc.)
                 boolean routed = connectorRouter.routeToConnector(event);
                 if (routed) {
-                    System.out.println("✓ [2/2] Routed to external connector");
+                    System.out.println("✓ [2/2] Routed to external connector for recipient: " + recipientId);
                     System.out.println("✓ Processing complete for message: " + messageId + " (routed to connector)");
                     return true;
                 } else {

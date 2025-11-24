@@ -31,28 +31,64 @@ Chat4All is an **educational implementation** of a distributed messaging platfor
 ┌─────────────┐      ┌─────────────┐      ┌─────────────┐
 │   Client    │─────▶│ API Service │─────▶│    Kafka    │
 │  (curl/app) │◀─────│  (REST API) │      │  (Events)   │
-└─────────────┘      └─────────────┘      └──────┬──────┘
+└─────────────┘      └──────┬──────┘      └──────┬──────┘
                             │                     │
-                            │                     ▼
-                            │              ┌─────────────┐
-                            │              │   Router    │
-                            │              │   Worker    │
-                            │              └──────┬──────┘
-                            │                     │
+                            │ Upload              │ outbound-messages
+                            │                     │ status-updates
                             ▼                     ▼
-                     ┌─────────────────────────────┐
-                     │      Cassandra (NoSQL)      │
-                     │  • Messages (by conv_id)    │
-                     │  • Conversations            │
-                     └─────────────────────────────┘
+                     ┌─────────────┐      ┌─────────────┐
+                     │    MinIO    │      │   Router    │
+                     │  (Object    │      │   Worker    │
+                     │   Storage)  │      └──────┬──────┘
+                     └─────────────┘             │
+                            │                    │ route by
+                            │ Presigned          │ recipient_id
+                            │ URLs               │
+                            │                    ▼
+                            │             ┌──────────────┐
+                            │             │  Connectors  │
+                            │             ├──────────────┤
+                            │             │  WhatsApp    │
+                            │             │  Instagram   │
+                            │             └──────┬───────┘
+                            │                    │
+                            │                    │ status-updates
+                            ▼                    ▼
+                     ┌────────────────────────────────┐
+                     │      Cassandra (NoSQL)         │
+                     │  • Messages (by conv_id)       │
+                     │  • Files metadata              │
+                     │  • Conversations               │
+                     │  • Status lifecycle            │
+                     └────────────────────────────────┘
+```
+
+### Message Flow
+
+**Text Message (Phases 1-6):**
+```
+Client → API (POST /v1/messages) → Kafka → Router → Cassandra
+                                             └─▶ Connectors → Status Updates → Cassandra
+```
+
+**File Message (Phases 7-8):**
+```
+1. Upload:    Client → API (POST /v1/files) → MinIO (streaming) → metadata → Cassandra
+2. Send:      Client → API (POST /v1/messages with file_id) → Kafka → Router
+3. Route:     Router → whatsapp-outbound or instagram-outbound → Connector
+4. Status:    Connector → status-updates → Router → Cassandra (DELIVERED, READ)
+5. Download:  Client → API (GET /v1/files/{id}/download) → Presigned URL → MinIO (direct)
 ```
 
 ### Key Design Decisions
 
 - **No Frameworks**: Using JDK's built-in `HttpServer` instead of Spring Boot (educational transparency)
-- **Minimal Dependencies**: Only 3 external libraries (Kafka, Cassandra, JWT)
+- **Minimal Dependencies**: Only 3 external libraries (Kafka, Cassandra, JWT) + MinIO client
 - **No ORM**: Direct CQL queries to understand NoSQL patterns
 - **Test-First**: All tests written before implementation
+- **Object Storage**: MinIO for scalable file storage (80% cost savings vs database BLOBs)
+- **Microservices**: Separate connectors for WhatsApp/Instagram (independent scaling)
+- **Presigned URLs**: Secure, time-limited download links (direct client-to-storage, no API bottleneck)
 
 ## 🚀 Quick Start
 
@@ -94,6 +130,8 @@ curl http://localhost:8082/health
 
 **Port Mapping:**
 - API Service: `http://localhost:8082` (mapped from internal 8080)
+- MinIO Console: `http://localhost:9001` (web UI, credentials: minioadmin/minioadmin)
+- MinIO API: `http://localhost:9000` (S3-compatible API)
 - Cassandra: `localhost:9042`
 - Kafka: `localhost:9092` (internal), `localhost:29092` (external)
 
@@ -111,7 +149,7 @@ TOKEN=$(curl -s -X POST http://localhost:8082/auth/token \
 
 echo "Token: $TOKEN"
 
-# 2. Send a message
+# 2. Send a text message
 MESSAGE_RESPONSE=$(curl -s -X POST http://localhost:8082/v1/messages \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
@@ -127,9 +165,54 @@ echo "Message sent: $MESSAGE_RESPONSE"
 echo "Waiting for async processing..."
 sleep 5
 
-# 4. Retrieve messages (NEW!)
+# 4. Retrieve messages
 curl -s -X GET "http://localhost:8082/v1/conversations/conv_demo_123/messages?limit=50&offset=0" \
   -H "Authorization: Bearer $TOKEN" | jq
+
+# 5. Upload a file (Entrega 2)
+FILE_RESPONSE=$(curl -s -X POST http://localhost:8082/v1/files \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@/etc/hosts" \
+  -F "conversation_id=conv_demo_123")
+
+echo "File uploaded: $FILE_RESPONSE"
+
+FILE_ID=$(echo $FILE_RESPONSE | jq -r '.file_id')
+
+# 6. Send message with file attachment to WhatsApp
+MESSAGE_WITH_FILE=$(curl -s -X POST http://localhost:8082/v1/messages \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"conversation_id\": \"conv_demo_123\",
+    \"sender_id\": \"user_a\",
+    \"recipient_id\": \"whatsapp:+5511999998888\",
+    \"content\": \"Check out this file!\",
+    \"file_id\": \"$FILE_ID\"
+  }")
+
+echo "Message with file sent: $MESSAGE_WITH_FILE"
+
+# 7. Wait for connector to process
+sleep 5
+
+# 8. Get presigned download URL (valid for 1 hour)
+curl -s -X GET "http://localhost:8082/v1/files/$FILE_ID/download" \
+  -H "Authorization: Bearer $TOKEN" | jq
+
+# Expected output:
+# {
+#   "download_url": "http://minio:9000/chat4all-files/conv_demo_123/file_xyz.jpg?X-Amz-Signature=...",
+#   "expires_in": 3600,
+#   "filename": "hosts"
+# }
+
+# Or use the test scripts:
+./scripts/test-end-to-end.sh          # Basic text messaging
+./scripts/test-file-upload.sh         # Upload 1KB, 1MB, 10MB files
+./scripts/test-file-download.sh       # Test presigned URLs
+./scripts/test-file-connectors-e2e.sh # Complete file sharing workflow
+./scripts/demo-file-sharing.sh        # Interactive demo (Entrega 2)
 
 # Expected output:
 # {
@@ -271,6 +354,38 @@ This project follows an **incremental delivery** approach. **Entrega 1 MVP is CO
 - [x] Pagination metadata in response
 - [x] Test script: test-get-messages.sh
 
+### ✅ Phase 7: File Upload/Download (Complete - Entrega 2!)
+- [x] POST /v1/files endpoint (multipart/form-data, up to 2GB)
+- [x] FileUploadHandler with streaming (memory-efficient, handles large files)
+- [x] MinIO integration (S3-compatible object storage)
+- [x] Cassandra files table (metadata: file_id, conversation_id, storage_path, size, checksum)
+- [x] GET /v1/files/{id}/download (presigned URLs, 1-hour expiry)
+- [x] SHA-256 checksums for integrity validation
+- [x] Test scripts: test-file-upload.sh, test-file-download.sh
+
+### ✅ Phase 8: Multi-Platform Connectors (Complete - Entrega 2!)
+- [x] Connector microservices architecture (WhatsApp, Instagram)
+- [x] Kafka routing: recipient_id prefix → topic mapping (whatsapp:xxx → whatsapp-outbound)
+- [x] OutboundMessageConsumer in each connector
+- [x] StatusUpdateProducer for delivery confirmations
+- [x] Simulated delivery (educational: no real API integrations)
+- [x] Independent scaling and deployment per platform
+- [x] Test script: test-whatsapp-connector.sh
+
+### ✅ Phase 9: Message Status Lifecycle (Complete - Entrega 2!)
+- [x] MessageStatus enum: SENT → DELIVERED → READ (state machine validation)
+- [x] StatusUpdateConsumer in Router Worker (processes status-updates topic)
+- [x] POST /v1/messages/{id}/read endpoint (mark message as read)
+- [x] Cassandra schema updates: delivered_at, read_at timestamps
+- [x] Two-step query pattern: SELECT by message_id → UPDATE by full primary key
+- [x] Test script: test-status-lifecycle.sh
+
+### ✅ Phase 10: Integration Testing (Complete - Entrega 2!)
+- [x] test-file-connectors-e2e.sh: Comprehensive E2E test (10 steps, 7 integration points)
+- [x] demo-file-sharing.sh: Interactive demonstration with colored output
+- [x] Validates: Auth → Upload → Send to WhatsApp → Send to Instagram → Mark READ → Download
+- [x] **Test Result**: 100% PASS - All systems integrated successfully!
+
 ### 📋 Entrega 1 Checklist
 
 - [x] **POST /v1/messages** - Enviar mensagem (autenticado, Kafka)
@@ -283,12 +398,25 @@ This project follows an **incremental delivery** approach. **Entrega 1 MVP is CO
 - [x] **End-to-End Tests** - Automated test scripts
 - [x] **Documentation** - ADRs, extensive code comments
 
-### 🎯 Next Steps (Entrega 2 - Future)
+### 📋 Entrega 2 Checklist (NEW - Current Focus!)
 
-See [`specs/002-advanced-features/`](specs/002-advanced-features/) for Phase 7-9:
-- [ ] Phase 7: File uploads (2GB support)
-- [ ] Phase 8: External connectors (WhatsApp integration)
-- [ ] Phase 9: Observability (metrics, tracing)
+- [x] **File Upload** - POST /v1/files (multipart, 2GB support, streaming)
+- [x] **Object Storage** - MinIO integration (S3-compatible, scalable)
+- [x] **File Download** - Presigned URLs (secure, time-limited, direct downloads)
+- [x] **Multi-Platform Routing** - recipient_id prefix → Kafka topic mapping
+- [x] **WhatsApp Connector** - Microservice consuming whatsapp-outbound topic
+- [x] **Instagram Connector** - Microservice consuming instagram-outbound topic
+- [x] **Status Lifecycle** - SENT → DELIVERED → READ state machine
+- [x] **Status Updates** - Connectors publish to status-updates topic
+- [x] **Mark as Read** - POST /v1/messages/{id}/read endpoint
+- [x] **Integration Tests** - test-file-connectors-e2e.sh (100% PASS)
+- [x] **Documentation** - ADRs 002-004, comprehensive code comments
+
+### 🎯 Next Steps (Entrega 3 - Future)
+
+See [`specs/003-observability/`](specs/003-observability/) for Phase 11-12:
+- [ ] Phase 11: Technical Report (deliverable)
+- [ ] Phase 12: Performance testing (100MB, 500MB, 1GB uploads)
 
 ## 🏛️ Constitutional Principles
 
@@ -333,9 +461,15 @@ chat4alltijolim/
 │   │   └── chat4all/api/
 │   │       ├── Main.java             # HTTP server entry point
 │   │       ├── http/                 # Request handlers
+│   │       │   ├── MessagesHandler.java
+│   │       │   ├── ConversationsHandler.java
+│   │       │   ├── FileUploadHandler.java (streaming, up to 2GB)
+│   │       │   ├── FileDownloadHandler.java (presigned URLs)
+│   │       │   └── MessageStatusHandler.java (mark as read)
 │   │       ├── auth/                 # JWT authentication
 │   │       ├── kafka/                # Kafka producer
 │   │       ├── cassandra/            # Database queries
+│   │       ├── storage/              # MinIO integration
 │   │       └── validation/           # Input validation
 │   ├── src/test/java/                # Tests (TDD)
 │   ├── Dockerfile
@@ -345,10 +479,32 @@ chat4alltijolim/
 │   ├── src/main/java/
 │   │   └── chat4all/worker/
 │   │       ├── Main.java             # Consumer loop entry point
-│   │       ├── kafka/                # Kafka consumer
+│   │       ├── kafka/                # Kafka consumer + routing logic
+│   │       │   ├── KafkaMessageConsumer.java
+│   │       │   ├── MessageRouter.java (recipient_id → topic)
+│   │       │   └── StatusUpdateConsumer.java
 │   │       ├── cassandra/            # Database persistence
 │   │       └── processing/           # Business logic
+│   │           └── MessageProcessor.java (status state machine)
 │   ├── src/test/java/                # Tests (TDD)
+│   ├── Dockerfile
+│   └── pom.xml
+│
+├── connector-whatsapp/       # WhatsApp connector microservice (NEW)
+│   ├── src/main/java/
+│   │   └── chat4all/connector/
+│   │       ├── Main.java
+│   │       ├── OutboundMessageConsumer.java (whatsapp-outbound topic)
+│   │       └── StatusUpdateProducer.java (publishes DELIVERED status)
+│   ├── Dockerfile
+│   └── pom.xml
+│
+├── connector-instagram/      # Instagram connector microservice (NEW)
+│   ├── src/main/java/
+│   │   └── chat4all/connector/
+│   │       ├── Main.java
+│   │       ├── OutboundMessageConsumer.java (instagram-outbound topic)
+│   │       └── StatusUpdateProducer.java
 │   ├── Dockerfile
 │   └── pom.xml
 │
@@ -357,26 +513,52 @@ chat4alltijolim/
 │       └── chat4all/shared/
 │           ├── Constants.java        # Configuration constants
 │           ├── Logger.java           # Structured logging
-│           └── MessageEvent.java     # Kafka event schema
+│           ├── MessageEvent.java     # Kafka event schema
+│           └── MessageStatus.java    # Status enum (SENT/DELIVERED/READ)
 │
 ├── cassandra-init/
-│   └── schema.cql            # Database schema (DDL)
+│   └── schema.cql            # Database schema (messages, files, conversations)
 │
 ├── docs/
 │   └── adr/                  # Architecture Decision Records
 │       ├── 001-no-frameworks.md
-│       ├── 002-cassandra-schema-design.md
-│       └── 003-kafka-partitioning-strategy.md
+│       ├── 002-object-storage-choice.md (NEW - MinIO rationale)
+│       ├── 003-connector-architecture.md (NEW - microservices pattern)
+│       └── 004-presigned-urls.md (NEW - security model)
 │
-├── specs/001-basic-messaging-api/
-│   ├── spec.md               # Feature specification
-│   ├── plan.md               # Implementation plan
-│   └── tasks.md              # Task breakdown (95 tasks)
+├── specs/
+│   ├── 001-basic-messaging-api/
+│   │   ├── spec.md               # Feature specification
+│   │   ├── plan.md               # Implementation plan
+│   │   └── tasks.md              # Task breakdown (95 tasks - COMPLETE)
+│   └── 002-file-storage-connectors/
+│       ├── spec.md               # File upload + connectors spec
+│       ├── plan.md               # Technical approach
+│       └── tasks.md              # Task breakdown (112 tasks - 81/112 complete)
 │
-├── docker-compose.yml        # Orchestration
+├── scripts/
+│   ├── test-end-to-end.sh        # Basic messaging E2E
+│   ├── test-file-upload.sh       # Upload 1KB, 1MB, 10MB files
+│   ├── test-file-download.sh     # Presigned URLs
+│   ├── test-file-connectors-e2e.sh  # Complete integration test (NEW)
+│   ├── demo-file-sharing.sh      # Interactive demo (NEW)
+│   └── test-status-lifecycle.sh  # Status transitions (NEW)
+│
+├── docker-compose.yml        # Orchestration (10 services)
 ├── pom.xml                   # Parent POM
 └── README.md                 # This file
 ```
+
+**Service Count**: 10 Docker containers
+- 1x API Service
+- 1x Router Worker
+- 2x Connectors (WhatsApp, Instagram)
+- 1x MinIO (object storage)
+- 1x Cassandra
+- 1x Kafka
+- 1x Zookeeper
+- 1x Cassandra Init
+- 1x Schema Init
 
 ## 🧪 Testing Strategy
 
@@ -513,8 +695,90 @@ docker-compose exec kafka kafka-console-consumer \
 ### Architecture Decision Records (ADRs)
 
 - **ADR-001**: [Why No Frameworks](docs/adr/001-no-frameworks.md)
-- **ADR-002**: [Cassandra Schema Design](docs/adr/002-cassandra-schema-design.md)
-- **ADR-003**: [Kafka Partitioning Strategy](docs/adr/003-kafka-partitioning-strategy.md)
+- **ADR-002**: [Object Storage Choice (MinIO vs Database BLOBs)](docs/adr/002-object-storage-choice.md)
+- **ADR-003**: [Connector Architecture (Microservices vs Monolithic)](docs/adr/003-connector-architecture.md)
+- **ADR-004**: [Presigned URLs for Secure Downloads](docs/adr/004-presigned-urls.md)
+
+## 🔌 Connector Architecture (Entrega 2)
+
+### What are Connectors?
+
+Connectors are **independent microservices** that translate Chat4All's internal message format to external platform APIs (WhatsApp, Instagram, Telegram, etc.). Each connector runs in its own Docker container and communicates via Kafka topics.
+
+### Why Separate Microservices?
+
+**Isolation**: One connector failure doesn't affect others  
+**Scaling**: Scale WhatsApp connector independently if it has more traffic  
+**Velocity**: Deploy Instagram updates without touching WhatsApp code  
+**Monitoring**: Platform-specific metrics and health checks  
+
+See [ADR-003](docs/adr/003-connector-architecture.md) for full rationale (comparison with monolithic and plugin approaches).
+
+### Routing Logic: recipient_id Prefix
+
+Messages are routed to connectors based on the **recipient_id prefix**:
+
+```java
+// Router Worker extracts prefix and maps to Kafka topic
+String recipientId = message.getRecipientId();  // e.g., "whatsapp:+5511999998888"
+
+String platform = recipientId.split(":")[0];    // Extract "whatsapp"
+String kafkaTopic = platform + "-outbound";     // Result: "whatsapp-outbound"
+
+kafkaProducer.send(kafkaTopic, message);
+```
+
+**Supported Platforms:**
+
+| recipient_id Format | Kafka Topic | Connector Service |
+|---------------------|-------------|-------------------|
+| `whatsapp:+5511999998888` | `whatsapp-outbound` | `connector-whatsapp` |
+| `instagram:@john_doe` | `instagram-outbound` | `connector-instagram` |
+| `telegram:123456789` | `telegram-outbound` | `connector-telegram` (future) |
+
+### Message Flow (with Connectors)
+
+```
+1. Client sends message with recipient_id="whatsapp:+5511999998888"
+   ↓
+2. API Service → Kafka (messages topic)
+   ↓
+3. Router Worker extracts prefix → routes to whatsapp-outbound topic
+   ↓
+4. WhatsApp Connector consumes message → simulates delivery
+   ↓
+5. Connector publishes to status-updates topic: {message_id, status: DELIVERED}
+   ↓
+6. Router Worker updates Cassandra: SET status = 'DELIVERED', delivered_at = now()
+   ↓
+7. Client queries GET /v1/conversations/{id}/messages → sees status: DELIVERED
+```
+
+### Adding a New Connector
+
+See [docs/CONNECTOR_PATTERN.md](docs/CONNECTOR_PATTERN.md) (coming soon) for step-by-step guide.
+
+**Quick Summary:**
+1. Create new Maven module: `connector-{platform}/`
+2. Implement `OutboundMessageConsumer` (Kafka consumer for `{platform}-outbound` topic)
+3. Implement `StatusUpdateProducer` (publish to `status-updates` topic)
+4. Add Dockerfile and service to `docker-compose.yml`
+5. Update Router Worker routing logic (if needed)
+
+**Example Connector Interface:**
+```java
+public interface PlatformConnector {
+    void sendMessage(String platformUserId, String content, String fileUrl);
+    void reportStatus(String messageId, MessageStatus status);
+}
+```
+
+### Current Connectors
+
+- **WhatsApp Connector** (`connector-whatsapp/`) - Simulated delivery (educational)
+- **Instagram Connector** (`connector-instagram/`) - Simulated delivery (educational)
+
+**Note**: Current implementation simulates delivery for educational purposes. Production deployment would integrate with real platform APIs (WhatsApp Business API, Instagram Graph API).
 
 ## 🐛 Troubleshooting
 
@@ -592,6 +856,17 @@ For questions about this educational project:
 
 ## 📊 Project Status
 
+**Entrega 2 (Semana 7-8): ✅ COMPLETE**
+
+- [x] File upload/download (MinIO, presigned URLs, 2GB support)
+- [x] Multi-platform connectors (WhatsApp, Instagram microservices)
+- [x] Message routing by recipient_id prefix
+- [x] Status lifecycle (SENT → DELIVERED → READ)
+- [x] Integration tests (test-file-connectors-e2e.sh - 100% PASS)
+- [x] Documentation (ADRs 002-004, comprehensive comments)
+
+**Previous Deliverables:**
+
 **Entrega 1 (Semana 3-4): ✅ COMPLETE**
 
 - [x] API básica (POST /v1/messages, GET /v1/conversations/{id}/messages)
@@ -604,8 +879,7 @@ For questions about this educational project:
 - [x] Docker Compose funcional
 
 **Next Deliverables:**
-- Entrega 2: File uploads (2GB support)
-- Entrega 3: External connectors (WhatsApp, Telegram)
+- Entrega 3: Technical report and performance testing
 
 ---
 

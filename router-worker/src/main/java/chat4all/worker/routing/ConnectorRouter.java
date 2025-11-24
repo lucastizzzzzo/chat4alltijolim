@@ -133,15 +133,21 @@ public class ConnectorRouter {
     /**
      * Extract recipient ID from MessageEvent
      * 
-     * Note: For simplicity, we use sender_id as recipient.
-     * In a real system, you'd extract from conversation participants.
+     * Phase 5: Now uses recipient_id field from MessageEvent.
+     * Falls back to sender_id for backward compatibility.
      * 
      * @param event MessageEvent
      * @return recipient ID
      */
     private String extractRecipientId(MessageEvent event) {
-        // Simplified: assume sender_id contains the recipient info
-        // In production: query conversation participants from database
+        // Phase 5: Use recipient_id field if present
+        String recipientId = event.getRecipientId();
+        if (recipientId != null && !recipientId.isEmpty()) {
+            return recipientId;
+        }
+        
+        // Fallback to sender_id for backward compatibility
+        // (used when recipient_id is not specified)
         return event.getSenderId();
     }
     

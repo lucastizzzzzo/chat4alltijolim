@@ -15,6 +15,8 @@ COPY pom.xml .
 COPY shared/ shared/
 COPY router-worker/ router-worker/
 COPY api-service/pom.xml api-service/pom.xml
+COPY connector-whatsapp/pom.xml connector-whatsapp/pom.xml
+COPY connector-instagram/pom.xml connector-instagram/pom.xml
 
 # Build application (skip tests in Docker build - run separately)
 RUN mvn clean package -DskipTests -pl router-worker -am

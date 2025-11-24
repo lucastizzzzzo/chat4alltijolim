@@ -296,6 +296,37 @@ services:
       - chat4all-network
     restart: on-failure
 
+  # ==========================================================================
+  # Instagram Connector Mock
+  # ==========================================================================
+  # Purpose: Simulates Instagram Business API integration
+  # - Consumes from instagram-outbound Kafka topic
+  # - Publishes delivery updates to status-updates topic
+  # - Health check endpoint on port 8084
+  # ==========================================================================
+  connector-instagram:
+    build:
+      context: .
+      dockerfile: connector-instagram/Dockerfile
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      # Kafka configuration
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_GROUP_ID: instagram-connector-group
+      KAFKA_TOPIC_INBOUND: instagram-outbound
+      KAFKA_TOPIC_STATUS: status-updates
+      
+      # Connector configuration
+      HEALTH_PORT: 8084
+      LOG_LEVEL: INFO
+    ports:
+      - "8084:8084"  # Health check endpoint
+    networks:
+      - chat4all-network
+    restart: on-failure
+
 # ============================================================================
 # NETWORKS
 # ============================================================================
