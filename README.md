@@ -149,6 +149,10 @@ TOKEN=$(curl -s -X POST http://localhost:8082/auth/token \
 
 echo "Token: $TOKEN"
 
+# Alternatively, use the interactive CLI (more user-friendly!)
+./cli/chat4all-cli.py
+# See cli/README.md for full documentation
+
 # 2. Send a text message
 MESSAGE_RESPONSE=$(curl -s -X POST http://localhost:8082/v1/messages \
   -H "Authorization: Bearer $TOKEN" \
@@ -233,6 +237,67 @@ curl -s -X GET "http://localhost:8082/v1/files/$FILE_ID/download" \
 #   }
 # }
 ```
+
+## 🖥️ Interactive CLI (User-Friendly Interface)
+
+Instead of using `curl` directly, you can use our **interactive CLI** for a better user experience:
+
+### Quick Setup
+
+```bash
+# Install CLI dependencies
+./cli/setup.sh
+
+# Run interactive CLI
+./cli/chat4all-cli.py
+```
+
+### CLI Features
+
+The CLI provides a menu-driven interface with:
+
+```
+Menu Principal:
+  1. Autenticar (login)              → Get JWT token
+  2. Enviar mensagem                 → Send text message
+  3. Enviar mensagem com arquivo     → Send message with file
+  4. Listar mensagens                → List conversation messages
+  5. Marcar mensagem como lida       → Mark as READ
+  6. Upload de arquivo               → Upload file to MinIO
+  7. Download de arquivo             → Download via presigned URL
+  8. Status da infraestrutura        → Check services health
+  9. Limpar tela
+  0. Sair
+```
+
+**Advantages over curl:**
+- ✅ No need to memorize API endpoints
+- ✅ Automatic token management
+- ✅ Input validation
+- ✅ Colored output for better readability
+- ✅ Formatted timestamps and status
+- ✅ Progress indicators for uploads/downloads
+- ✅ Error messages in plain Portuguese
+
+**Example Session:**
+
+```
+./cli/chat4all-cli.py
+
+👤 Logado como: user_a
+
+Escolha uma opção: 2
+
+📨 Enviar Mensagem
+Conversation ID: conv_demo_123
+Recipient ID: whatsapp:+5511999998888
+Mensagem: Olá! Como vai?
+✓ Mensagem enviada com sucesso!
+  Message ID: msg_abc123...
+  Status: SENT
+```
+
+See **[cli/README.md](cli/README.md)** for complete CLI documentation.
 
 ### 4. Run Automated Tests
 
