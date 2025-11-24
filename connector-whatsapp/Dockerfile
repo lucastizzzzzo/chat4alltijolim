@@ -23,6 +23,7 @@ COPY connector-whatsapp/ connector-whatsapp/
 # Copy other module POMs (needed for reactor build)
 COPY api-service/pom.xml api-service/pom.xml
 COPY router-worker/pom.xml router-worker/pom.xml
+COPY connector-instagram/pom.xml connector-instagram/pom.xml
 
 # Build only connector-whatsapp module
 RUN mvn clean package -DskipTests -pl connector-whatsapp -am

@@ -106,11 +106,11 @@ Client → API (POST /v1/messages) → Kafka → Router → Cassandra
 git clone https://github.com/your-username/chat4alltijolim.git
 cd chat4alltijolim
 
-# Build all modules
-mvn clean package -DskipTests
+# Build all modules (REQUIRED before docker-compose)
+./build.sh
 ```
 
-**Note**: The first build may take 2-3 minutes to download dependencies.
+**Important**: The `build.sh` script compiles all modules and creates the JARs needed by Docker. This is required on fresh clones because `target/` directories are gitignored. First build may take 2-3 minutes to download dependencies.
 
 ### 2. Start All Services
 
