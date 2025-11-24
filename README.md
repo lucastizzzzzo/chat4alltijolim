@@ -250,6 +250,10 @@ Instead of using `curl` directly, you can use our **interactive CLI** for a bett
 
 # Run interactive CLI
 ./cli/chat4all-cli.py
+
+# Or set custom API URL
+export CHAT4ALL_API_URL=http://localhost:8080
+./cli/chat4all-cli.py
 ```
 
 ### CLI Features

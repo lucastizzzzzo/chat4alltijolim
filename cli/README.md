@@ -46,8 +46,12 @@ Faz login e obtém token JWT:
 
 ```
 🔐 Autenticação
-Usuários disponíveis: user_a, user_b, user_c
-Digite o user_id: user_a
+Usuários de demonstração disponíveis:
+  • user_a / pass_a
+  • user_b / pass_b
+
+Username: user_a
+Password: pass_a
 ✓ Autenticado com sucesso!
   Usuário: user_a
   Token válido por: 1 hora
@@ -193,12 +197,14 @@ Para verificar containers Docker:
 ### Variáveis de Ambiente
 
 ```bash
-# URL da API (padrão: http://localhost:8082)
-export CHAT4ALL_API_URL=http://localhost:8082
+# URL da API (padrão: http://localhost:8080)
+export CHAT4ALL_API_URL=http://localhost:8080
 
 # Executar CLI
 ./cli/chat4all-cli.py
 ```
+
+**Nota**: A API roda na porta **8080** dentro do container Docker. Se você mapeou para outra porta externa no `docker-compose.yml`, ajuste a variável `CHAT4ALL_API_URL`.
 
 ## 📋 Exemplos de Uso
 
@@ -300,7 +306,13 @@ Verifique se a API está rodando:
 docker-compose ps api-service
 # Se não estiver rodando:
 docker-compose up -d
+
+# Aguarde ~30 segundos para a API inicializar
+docker-compose logs -f api-service
+# Aguarde até ver: "API Service started on port 8080"
 ```
+
+**Porta correta**: A API roda na porta **8080** (não 8082).
 
 ### Erro: `401 Unauthorized`
 

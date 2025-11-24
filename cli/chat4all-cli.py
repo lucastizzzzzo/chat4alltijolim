@@ -24,7 +24,7 @@ class Colors:
     UNDERLINE = '\033[4m'
 
 class Chat4AllCLI:
-    def __init__(self, api_url: str = "http://localhost:8082"):
+    def __init__(self, api_url: str = "http://localhost:8080"):
         self.api_url = api_url
         self.token: Optional[str] = None
         self.current_user: Optional[str] = None
@@ -53,29 +53,44 @@ class Chat4AllCLI:
     def authenticate(self):
         """Autentica usuário e obtém JWT token"""
         print(f"\n{Colors.BOLD}🔐 Autenticação{Colors.ENDC}")
-        print(f"{Colors.YELLOW}Usuários disponíveis: user_a, user_b, user_c{Colors.ENDC}")
+        print(f"{Colors.YELLOW}Usuários de demonstração disponíveis:{Colors.ENDC}")
+        print(f"  • user_a / pass_a")
+        print(f"  • user_b / pass_b")
         
-        user_id = input(f"{Colors.CYAN}Digite o user_id:{Colors.ENDC} ").strip()
-        if not user_id:
-            print(f"{Colors.RED}❌ User ID não pode ser vazio{Colors.ENDC}")
+        username = input(f"\n{Colors.CYAN}Username:{Colors.ENDC} ").strip()
+        password = input(f"{Colors.CYAN}Password:{Colors.ENDC} ").strip()
+        
+        if not username or not password:
+            print(f"{Colors.RED}❌ Username e password são obrigatórios{Colors.ENDC}")
             return
         
         try:
             response = requests.post(
-                f"{self.api_url}/v1/auth/login",
-                json={"user_id": user_id},
+                f"{self.api_url}/auth/token",
+                json={"username": username, "password": password},
                 timeout=5
             )
             
             if response.status_code == 200:
                 data = response.json()
-                self.token = data.get("token")
-                self.current_user = user_id
+                self.token = data.get("access_token")
+                self.current_user = username
                 print(f"{Colors.GREEN}✓ Autenticado com sucesso!{Colors.ENDC}")
-                print(f"  Usuário: {Colors.BOLD}{user_id}{Colors.ENDC}")
+                print(f"  Usuário: {Colors.BOLD}{username}{Colors.ENDC}")
                 print(f"  Token válido por: 1 hora")
             else:
                 print(f"{Colors.RED}❌ Erro na autenticação: {response.status_code}{Colors.ENDC}")
+                if response.status_code == 401:
+                    print(f"  Credenciais inválidas. Tente user_a/pass_a ou user_b/pass_b")
+                else:
+                    print(f"  {response.text}")
+        except requests.exceptions.ConnectionError:
+            print(f"{Colors.RED}❌ Não foi possível conectar à API{Colors.ENDC}")
+            print(f"\n{Colors.YELLOW}Verifique se os serviços estão rodando:{Colors.ENDC}")
+            print(f"  docker-compose ps")
+            print(f"\n{Colors.YELLOW}Se não estiverem, inicie com:{Colors.ENDC}")
+            print(f"  docker-compose up -d")
+            print(f"\n{Colors.YELLOW}API esperada em:{Colors.ENDC} {self.api_url}")
         except requests.exceptions.RequestException as e:
             print(f"{Colors.RED}❌ Erro de conexão: {e}{Colors.ENDC}")
     
@@ -359,6 +374,8 @@ class Chat4AllCLI:
             "MinIO": "http://localhost:9000/minio/health/live",
         }
         
+        print(f"{Colors.YELLOW}Verificando conexão com:{Colors.ENDC} {self.api_url}\n")
+        
         for name, url in services.items():
             try:
                 response = requests.get(url, timeout=3)
@@ -415,7 +432,7 @@ class Chat4AllCLI:
 
 def main():
     """Ponto de entrada do CLI"""
-    api_url = os.getenv("CHAT4ALL_API_URL", "http://localhost:8082")
+    api_url = os.getenv("CHAT4ALL_API_URL", "http://localhost:8080")
     
     cli = Chat4AllCLI(api_url)
     
