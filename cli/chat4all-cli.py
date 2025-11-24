@@ -103,7 +103,7 @@ class Chat4AllCLI:
         print(f"\n{Colors.BOLD}📨 Enviar Mensagem{Colors.ENDC}")
         
         conversation_id = input(f"{Colors.CYAN}Conversation ID:{Colors.ENDC} ").strip()
-        recipient_id = input(f"{Colors.CYAN}Recipient ID (ex: whatsapp:+5511999998888 ou instagram:@user):{Colors.ENDC} ").strip()
+        recipient_id = input(f"{Colors.CYAN}Recipient ID (ex: whatsapp:+5511999998888 ou instagram:@usuario):{Colors.ENDC} ").strip()
         content = input(f"{Colors.CYAN}Mensagem:{Colors.ENDC} ").strip()
         
         if not all([conversation_id, recipient_id, content]):
@@ -125,11 +125,13 @@ class Chat4AllCLI:
                 timeout=10
             )
             
-            if response.status_code == 201:
+            if response.status_code in [200, 201, 202]:
                 data = response.json()
                 print(f"{Colors.GREEN}✓ Mensagem enviada com sucesso!{Colors.ENDC}")
                 print(f"  Message ID: {Colors.BOLD}{data.get('message_id')}{Colors.ENDC}")
                 print(f"  Status: {data.get('status', 'SENT')}")
+                if response.status_code == 202:
+                    print(f"  {Colors.YELLOW}Processamento assíncrono (aguarde alguns segundos){Colors.ENDC}")
             else:
                 print(f"{Colors.RED}❌ Erro ao enviar: {response.status_code}{Colors.ENDC}")
                 print(f"  {response.text}")
@@ -169,11 +171,13 @@ class Chat4AllCLI:
                 timeout=10
             )
             
-            if response.status_code == 201:
+            if response.status_code in [200, 201, 202]:
                 data = response.json()
                 print(f"{Colors.GREEN}✓ Mensagem com arquivo enviada!{Colors.ENDC}")
                 print(f"  Message ID: {Colors.BOLD}{data.get('message_id')}{Colors.ENDC}")
                 print(f"  File ID: {file_id}")
+                if response.status_code == 202:
+                    print(f"  {Colors.YELLOW}Processamento assíncrono (aguarde alguns segundos){Colors.ENDC}")
             else:
                 print(f"{Colors.RED}❌ Erro ao enviar: {response.status_code}{Colors.ENDC}")
         except requests.exceptions.RequestException as e:
