@@ -139,28 +139,55 @@ class Chat4AllCLI:
             print(f"{Colors.RED}❌ Erro de conexão: {e}{Colors.ENDC}")
     
     def send_message_with_file(self):
-        """Envia mensagem com arquivo anexado"""
+        """Envia mensagem com arquivo anexado - faz upload automático"""
         if not self.token:
             print(f"{Colors.RED}❌ Você precisa autenticar primeiro (opção 1){Colors.ENDC}")
             return
         
         print(f"\n{Colors.BOLD}📎 Enviar Mensagem com Arquivo{Colors.ENDC}")
         
-        file_id = input(f"{Colors.CYAN}File ID (faça upload primeiro com opção 6):{Colors.ENDC} ").strip()
+        file_path = input(f"{Colors.CYAN}Caminho do arquivo:{Colors.ENDC} ").strip()
         conversation_id = input(f"{Colors.CYAN}Conversation ID:{Colors.ENDC} ").strip()
         recipient_id = input(f"{Colors.CYAN}Recipient ID:{Colors.ENDC} ").strip()
-        content = input(f"{Colors.CYAN}Mensagem (opcional):{Colors.ENDC} ").strip()
+        content = input(f"{Colors.CYAN}Mensagem:{Colors.ENDC} ").strip()
         
-        if not all([file_id, conversation_id, recipient_id]):
-            print(f"{Colors.RED}❌ File ID, Conversation ID e Recipient ID são obrigatórios{Colors.ENDC}")
+        if not all([file_path, conversation_id, recipient_id, content]):
+            print(f"{Colors.RED}❌ Todos os campos são obrigatórios{Colors.ENDC}")
+            return
+        
+        if not os.path.exists(file_path):
+            print(f"{Colors.RED}❌ Arquivo não encontrado: {file_path}{Colors.ENDC}")
             return
         
         try:
+            # 1. Upload do arquivo primeiro
+            print(f"{Colors.YELLOW}Fazendo upload do arquivo...{Colors.ENDC}")
+            with open(file_path, 'rb') as f:
+                files = {'file': f}
+                data = {'conversation_id': conversation_id}
+                
+                upload_response = requests.post(
+                    f"{self.api_url}/v1/files",
+                    headers={"Authorization": f"Bearer {self.token}"},
+                    files=files,
+                    data=data,
+                    timeout=300
+                )
+                
+                if upload_response.status_code != 201:
+                    print(f"{Colors.RED}❌ Erro no upload: {upload_response.status_code}{Colors.ENDC}")
+                    return
+                
+                upload_data = upload_response.json()
+                file_id = upload_data.get('file_id')
+                print(f"{Colors.GREEN}✓ Upload concluído! File ID: {file_id}{Colors.ENDC}")
+            
+            # 2. Enviar mensagem com o file_id
             payload = {
                 "conversation_id": conversation_id,
                 "sender_id": self.current_user,
                 "recipient_id": recipient_id,
-                "content": content or f"Arquivo: {file_id}",
+                "content": content,
                 "file_id": file_id
             }
             
@@ -182,6 +209,8 @@ class Chat4AllCLI:
                 print(f"{Colors.RED}❌ Erro ao enviar: {response.status_code}{Colors.ENDC}")
         except requests.exceptions.RequestException as e:
             print(f"{Colors.RED}❌ Erro de conexão: {e}{Colors.ENDC}")
+        except Exception as e:
+            print(f"{Colors.RED}❌ Erro: {e}{Colors.ENDC}")
     
     def list_messages(self):
         """Lista mensagens de uma conversa"""
@@ -199,10 +228,10 @@ class Chat4AllCLI:
             return
         
         try:
-            params = {"conversation_id": conversation_id, "limit": limit}
+            params = {"limit": limit}
             
             response = requests.get(
-                f"{self.api_url}/v1/messages",
+                f"{self.api_url}/v1/conversations/{conversation_id}/messages",
                 headers={"Authorization": f"Bearer {self.token}"},
                 params=params,
                 timeout=10
@@ -321,51 +350,117 @@ class Chat4AllCLI:
             print(f"{Colors.RED}❌ Erro de conexão: {e}{Colors.ENDC}")
     
     def download_file(self):
-        """Download de arquivo"""
+        """Download de arquivo - Lista arquivos da conversa para escolher"""
         if not self.token:
             print(f"{Colors.RED}❌ Você precisa autenticar primeiro (opção 1){Colors.ENDC}")
             return
         
         print(f"\n{Colors.BOLD}📥 Download de Arquivo{Colors.ENDC}")
         
-        file_id = input(f"{Colors.CYAN}File ID:{Colors.ENDC} ").strip()
+        conversation_id = input(f"{Colors.CYAN}Conversation ID:{Colors.ENDC} ").strip()
         
-        if not file_id:
-            print(f"{Colors.RED}❌ File ID é obrigatório{Colors.ENDC}")
+        if not conversation_id:
+            print(f"{Colors.RED}❌ Conversation ID é obrigatório{Colors.ENDC}")
             return
         
         try:
-            # Obter presigned URL
+            # 1. Listar mensagens da conversa para encontrar arquivos
+            print(f"{Colors.YELLOW}Buscando arquivos na conversa...{Colors.ENDC}")
+            
             response = requests.get(
-                f"{self.api_url}/v1/files/{file_id}/download",
+                f"{self.api_url}/v1/conversations/{conversation_id}/messages",
                 headers={"Authorization": f"Bearer {self.token}"},
+                params={"limit": 50},
                 timeout=10
             )
             
-            if response.status_code == 200:
-                data = response.json()
-                download_url = data.get('download_url')
-                filename = data.get('filename', file_id)
+            if response.status_code != 200:
+                print(f"{Colors.RED}❌ Erro ao listar mensagens: {response.status_code}{Colors.ENDC}")
+                return
+            
+            data = response.json()
+            messages = data.get("messages", [])
+            
+            # Filtrar mensagens com arquivos
+            files_info = []
+            for msg in messages:
+                if msg.get('file_id'):
+                    files_info.append({
+                        'file_id': msg['file_id'],
+                        'filename': msg.get('file_metadata', {}).get('filename', 'unknown'),
+                        'size': msg.get('file_metadata', {}).get('size_bytes', 0),
+                        'sender': msg.get('sender_id', 'unknown'),
+                        'timestamp': msg.get('timestamp', 0)
+                    })
+            
+            if not files_info:
+                print(f"{Colors.YELLOW}Nenhum arquivo encontrado nesta conversa{Colors.ENDC}")
+                return
+            
+            # 2. Exibir lista de arquivos
+            print(f"\n{Colors.GREEN}📎 Arquivos disponíveis:{Colors.ENDC}\n")
+            for idx, file_info in enumerate(files_info, 1):
+                timestamp = datetime.fromtimestamp(file_info['timestamp'] / 1000)
+                size_bytes = int(file_info['size']) if file_info['size'] else 0
+                size_kb = size_bytes / 1024
+                print(f"  {Colors.BOLD}{idx}.{Colors.ENDC} {file_info['filename']}")
+                print(f"     📅 {timestamp.strftime('%d/%m/%Y %H:%M')}")
+                print(f"     👤 {file_info['sender']}")
+                print(f"     💾 {size_kb:.2f} KB")
+                print()
+            
+            # 3. Usuário escolhe arquivo(s)
+            choice = input(f"{Colors.CYAN}Escolha o(s) número(s) (ex: 1 ou 1,3,5):{Colors.ENDC} ").strip()
+            
+            if not choice:
+                print(f"{Colors.YELLOW}Cancelado{Colors.ENDC}")
+                return
+            
+            # Parse escolhas
+            try:
+                indices = [int(x.strip()) for x in choice.split(',')]
+                selected_files = [files_info[i-1] for i in indices if 1 <= i <= len(files_info)]
+            except (ValueError, IndexError):
+                print(f"{Colors.RED}❌ Escolha inválida{Colors.ENDC}")
+                return
+            
+            if not selected_files:
+                print(f"{Colors.RED}❌ Nenhum arquivo válido selecionado{Colors.ENDC}")
+                return
+            
+            # 4. Download dos arquivos selecionados
+            for file_info in selected_files:
+                file_id = file_info['file_id']
+                filename = file_info['filename']
                 
-                print(f"{Colors.GREEN}✓ URL de download gerada{Colors.ENDC}")
-                print(f"  URL: {download_url[:80]}...")
-                print(f"  Expira em: {data.get('expires_in', 3600)} segundos")
-                print(f"\n{Colors.YELLOW}Baixando arquivo...{Colors.ENDC}")
+                print(f"\n{Colors.YELLOW}Baixando: {filename}...{Colors.ENDC}")
                 
-                # Download do arquivo
-                file_response = requests.get(download_url, timeout=300)
+                # Use direct proxy endpoint instead of presigned URL
+                # This avoids signature issues with hostname substitution
+                response = requests.get(
+                    f"{self.api_url}/v1/files/{file_id}/content",
+                    headers={"Authorization": f"Bearer {self.token}"},
+                    timeout=300,
+                    stream=True
+                )
                 
-                if file_response.status_code == 200:
-                    output_path = f"./{filename}"
-                    with open(output_path, 'wb') as f:
-                        f.write(file_response.content)
+                if response.status_code == 200:
+                    # Salvar em ~/Downloads
+                    downloads_dir = os.path.expanduser("~/Downloads")
+                    os.makedirs(downloads_dir, exist_ok=True)
+                    output_path = os.path.join(downloads_dir, filename)
                     
+                    with open(output_path, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            if chunk:
+                                f.write(chunk)
+                    
+                    file_size = os.path.getsize(output_path) / 1024
                     print(f"{Colors.GREEN}✓ Arquivo salvo: {output_path}{Colors.ENDC}")
-                    print(f"  Tamanho: {len(file_response.content) / 1024:.2f} KB")
+                    print(f"  Tamanho: {file_size:.2f} KB")
                 else:
-                    print(f"{Colors.RED}❌ Erro no download: {file_response.status_code}{Colors.ENDC}")
-            else:
-                print(f"{Colors.RED}❌ Erro ao gerar URL: {response.status_code}{Colors.ENDC}")
+                    print(f"{Colors.RED}❌ Erro no download: {response.status_code}{Colors.ENDC}")
+        
         except requests.exceptions.RequestException as e:
             print(f"{Colors.RED}❌ Erro de conexão: {e}{Colors.ENDC}")
     

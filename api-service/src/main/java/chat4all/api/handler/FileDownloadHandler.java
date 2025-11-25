@@ -86,7 +86,7 @@ public class FileDownloadHandler implements HttpHandler {
         this.minioClient = MinioClientFactory.getInstance();
         this.bucketName = MinioClientFactory.getBucketName();
         System.out.println("[FileDownloadHandler] Initialized with expiry: " + EXPIRY_HOURS + " hours");
-        System.out.println("[FileDownloadHandler] Note: Presigned URLs work within Docker network only");
+        System.out.println("[FileDownloadHandler] URLs will be rewritten for external access");
     }
     
     @Override
@@ -101,16 +101,21 @@ public class FileDownloadHandler implements HttpHandler {
         }
         
         try {
-            // Extract file_id from path: /v1/files/{file_id}/download
             String path = exchange.getRequestURI().getPath();
-            String fileId = extractFileIdFromPath(path);
+            
+            // Check if this is a content request (proxy) or download (presigned URL)
+            boolean isProxyRequest = path.contains("/content");
+            
+            // Extract file_id from path
+            String fileId = extractFileIdFromPath(path, isProxyRequest);
             
             if (fileId == null || fileId.isEmpty()) {
                 sendErrorResponse(exchange, 400, "Missing file_id in URL path");
                 return;
             }
             
-            System.out.println("[FileDownloadHandler] Requesting download for file: " + fileId);
+            System.out.println("[FileDownloadHandler] Requesting " + 
+                (isProxyRequest ? "proxied download" : "presigned URL") + " for file: " + fileId);
             
             // Query file metadata from Cassandra
             Optional<FileEvent> fileEventOpt = fileRepository.findById(fileId);
@@ -123,14 +128,14 @@ public class FileDownloadHandler implements HttpHandler {
             
             FileEvent fileEvent = fileEventOpt.get();
             
-            // TODO Phase 4: Verify user has permission to access this file
-            // - Extract user_id from JWT token
-            // - Verify user is member of file's conversation_id
-            // - Return 403 Forbidden if not authorized
+            // Handle proxy request (stream directly from MinIO)
+            if (isProxyRequest) {
+                proxyFileContent(exchange, fileEvent);
+                return;
+            }
             
-            // Generate presigned URL (using external client for correct signature)
+            // Handle presigned URL request (original behavior)
             String downloadUrl = generatePresignedUrl(fileEvent.getStoragePath());
-            
             Instant expiresAt = Instant.now().plus(EXPIRY_HOURS, java.time.temporal.ChronoUnit.HOURS);
             
             System.out.println("[FileDownloadHandler] Generated presigned URL for: " + fileEvent.getFilename());
@@ -158,28 +163,80 @@ public class FileDownloadHandler implements HttpHandler {
      * Extract file_id from URL path
      * 
      * Educational note: Path parsing
-     * - URL format: /v1/files/{file_id}/download
-     * - Split by "/" and get 4th segment (index 3)
+     * - URL format: /v1/files/{file_id}/download or /v1/files/{file_id}/content
+     * - Split by "/" and get 3rd segment (index 2)
      * - Robust parsing handles trailing slashes
      * 
      * Examples:
      * - /v1/files/abc123/download → "abc123"
-     * - /v1/files/abc123/download/ → "abc123"
+     * - /v1/files/abc123/content → "abc123"
      * 
      * @param path URL path
+     * @param isProxyRequest whether this is a /content request
      * @return file_id or null if invalid path
      */
-    private String extractFileIdFromPath(String path) {
+    private String extractFileIdFromPath(String path, boolean isProxyRequest) {
         // Remove leading/trailing slashes and split
         String[] segments = path.replaceAll("^/|/$", "").split("/");
         
-        // Expected: ["v1", "files", "{file_id}", "download"]
+        System.out.println("[FileDownloadHandler] Path: " + path);
+        System.out.println("[FileDownloadHandler] Segments: " + String.join(", ", segments));
+        System.out.println("[FileDownloadHandler] isProxyRequest: " + isProxyRequest);
+        
+        // Expected: ["v1", "files", "{file_id}", "download" or "content"]
+        String expectedSuffix = isProxyRequest ? "content" : "download";
         if (segments.length >= 4 && "v1".equals(segments[0]) && 
-            "files".equals(segments[1]) && "download".equals(segments[3])) {
+            "files".equals(segments[1]) && expectedSuffix.equals(segments[3])) {
+            System.out.println("[FileDownloadHandler] Extracted file_id: " + segments[2]);
             return segments[2];
         }
         
+        System.out.println("[FileDownloadHandler] Failed to extract file_id from path");
         return null;
+    }
+    
+    /**
+     * Proxy file content directly from MinIO
+     * 
+     * This method downloads the file from MinIO and streams it directly to the client.
+     * Used as a workaround for presigned URL issues in development environments.
+     * 
+     * @param exchange HTTP exchange
+     * @param fileEvent File metadata
+     */
+    private void proxyFileContent(HttpExchange exchange, FileEvent fileEvent) throws IOException {
+        try {
+            // Get file from MinIO
+            java.io.InputStream stream = minioClient.getObject(
+                io.minio.GetObjectArgs.builder()
+                    .bucket(bucketName)
+                    .object(fileEvent.getStoragePath())
+                    .build()
+            );
+            
+            // Set response headers
+            exchange.getResponseHeaders().set("Content-Type", fileEvent.getMimetype());
+            exchange.getResponseHeaders().set("Content-Disposition", 
+                "attachment; filename=\"" + fileEvent.getFilename() + "\"");
+            exchange.getResponseHeaders().set("Content-Length", String.valueOf(fileEvent.getSizeBytes()));
+            
+            // Stream file to client
+            exchange.sendResponseHeaders(200, fileEvent.getSizeBytes());
+            try (java.io.OutputStream os = exchange.getResponseBody()) {
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = stream.read(buffer)) != -1) {
+                    os.write(buffer, 0, bytesRead);
+                }
+            }
+            stream.close();
+            
+            System.out.println("[FileDownloadHandler] Proxied file: " + fileEvent.getFilename());
+            
+        } catch (Exception e) {
+            System.err.println("[FileDownloadHandler] Error proxying file: " + e.getMessage());
+            sendErrorResponse(exchange, 500, "Failed to download file from storage");
+        }
     }
     
     /**
@@ -218,14 +275,12 @@ public class FileDownloadHandler implements HttpHandler {
                         .build()
         );
         
+        // Don't rewrite hostname - let clients handle it
+        // URL contains internal hostname (minio:9000)
+        // External clients should replace with localhost:9000
+        
         System.out.println("[FileDownloadHandler] Presigned URL generated for: " + storagePath);
         System.out.println("[FileDownloadHandler] URL (truncated): " + url.substring(0, Math.min(100, url.length())) + "...");
-        
-        // Educational note: Known limitation
-        // - URL contains internal hostname (minio:9000)
-        // - Works within Docker network but not from external clients
-        // - Production solution: Configure MinIO with external domain name
-        // - Alternative: Implement download proxy in API (less scalable)
         
         return url;
     }

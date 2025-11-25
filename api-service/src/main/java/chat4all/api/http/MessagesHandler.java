@@ -171,19 +171,11 @@ public class MessagesHandler implements HttpHandler {
             // 6. Validate message
             validator.validate(messageData);
             
-            // 7. Phase 2: Handle file attachments
-            String messageType = (String) messageData.getOrDefault("type", "text");
-            String fileId = null;
+            // 7. Phase 2: Handle file attachments (accept file_id with or without type="file")
+            String fileId = (String) messageData.get("file_id");
             Map<String, String> fileMetadata = null;
             
-            if ("file".equals(messageType)) {
-                // Require file_id for file messages
-                fileId = (String) messageData.get("file_id");
-                if (fileId == null || fileId.trim().isEmpty()) {
-                    sendErrorResponse(exchange, 400, "file_id is required when type=file");
-                    return;
-                }
-                
+            if (fileId != null && !fileId.trim().isEmpty()) {
                 // Validate file exists in database
                 java.util.Optional<FileEvent> fileEvent = fileRepository.findById(fileId);
                 if (!fileEvent.isPresent()) {

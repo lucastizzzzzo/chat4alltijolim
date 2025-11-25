@@ -110,6 +110,7 @@ services:
     environment:
       MINIO_ROOT_USER: admin
       MINIO_ROOT_PASSWORD: password123
+      MINIO_DOMAIN: localhost
     volumes:
       - minio-data:/data
     command: server /data --console-address ":9001"
@@ -191,7 +192,7 @@ services:
       minio-init:
         condition: service_completed_successfully
     ports:
-      - "8080-8082:8080"  # Maps to random ports when scaling
+      - "8080:8080"  # Fixed port for CLI
     environment:
       # Kafka configuration
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
