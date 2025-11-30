@@ -32,6 +32,8 @@ public class WhatsAppConnector {
     
     private final KafkaConsumer<String, String> consumer;
     private final StatusPublisher statusPublisher;
+    private final ConnectorMetricsRegistry metricsRegistry;
+    private final CircuitBreaker circuitBreaker;
     private final Random random;
     private volatile boolean running;
     
@@ -50,6 +52,8 @@ public class WhatsAppConnector {
         StatusPublisher statusPublisher
     ) {
         this.statusPublisher = statusPublisher;
+        this.metricsRegistry = ConnectorMetricsRegistry.getInstance();
+        this.circuitBreaker = new CircuitBreaker(metricsRegistry);
         this.random = new Random();
         this.running = true;
         
@@ -150,18 +154,45 @@ public class WhatsAppConnector {
             System.out.println("[WhatsApp] Recipient: " + recipientId);
             System.out.println("[WhatsApp] Content: " + event.getContent());
             
-            // Simulate WhatsApp Business API call
-            simulateApiCall(messageId, recipientId);
+            // Check circuit breaker before making API call
+            if (!circuitBreaker.allowRequest()) {
+                System.err.println("⚠️ [WhatsApp] Circuit breaker OPEN, skipping API call for: " + messageId);
+                metricsRegistry.recordMessageFailed();
+                // Message stays in Kafka, will retry later when circuit closes
+                return;
+            }
             
-            // Publish DELIVERED status
-            statusPublisher.publishDelivered(messageId);
+            // Simulate WhatsApp Business API call (track duration)
+            long apiStart = System.currentTimeMillis();
+            boolean success = simulateApiCall(messageId, recipientId);
+            long apiDuration = System.currentTimeMillis() - apiStart;
             
-            System.out.println("✅ Processing complete for message: " + messageId);
+            // Record API call metrics
+            metricsRegistry.recordApiCall(apiDuration);
+            
+            // Update circuit breaker based on result
+            if (success) {
+                circuitBreaker.recordSuccess();
+                metricsRegistry.recordMessageSent();
+                
+                // Publish DELIVERED status
+                statusPublisher.publishDelivered(messageId);
+                
+                System.out.println("✅ Processing complete for message: " + messageId);
+            } else {
+                circuitBreaker.recordFailure();
+                metricsRegistry.recordMessageFailed();
+                System.err.println("❌ Failed to deliver message: " + messageId);
+            }
+            
             System.out.println("");
             
         } catch (Exception e) {
             System.err.println("❌ Error processing message: " + e.getMessage());
             e.printStackTrace();
+            // Record failure
+            circuitBreaker.recordFailure();
+            metricsRegistry.recordMessageFailed();
             // Don't rethrow - continue processing other messages
         }
     }
@@ -173,12 +204,22 @@ public class WhatsAppConnector {
      * - Random delay (200-500ms) simulates network latency
      * - In production: would use HTTP client to call real WhatsApp API
      * - Error handling: retry logic, circuit breaker patterns
+     * - Simulates 10% failure rate for circuit breaker testing
      * 
      * @param messageId Message ID being delivered
      * @param recipientId Recipient phone number (e.g., +5511999999999)
+     * @return true if delivery succeeded, false if failed
      */
-    private void simulateApiCall(String messageId, String recipientId) {
+    private boolean simulateApiCall(String messageId, String recipientId) {
         try {
+            // Simulate 10% failure rate for circuit breaker testing
+            boolean shouldFail = random.nextInt(10) == 0;
+            
+            if (shouldFail) {
+                System.err.println("[WhatsApp] ✗ Simulated API failure for " + recipientId);
+                return false;
+            }
+            
             // Random delay between 200-500ms
             int delayMs = 200 + random.nextInt(300);
             
@@ -188,10 +229,12 @@ public class WhatsAppConnector {
             Thread.sleep(delayMs);
             
             System.out.println("[WhatsApp] ✓ Delivered to " + recipientId);
+            return true;
             
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             System.err.println("❌ API simulation interrupted");
+            return false;
         }
     }
     

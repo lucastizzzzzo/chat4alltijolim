@@ -2,6 +2,7 @@ package chat4all.worker;
 
 import chat4all.worker.cassandra.CassandraConnection;
 import chat4all.worker.cassandra.CassandraMessageStore;
+import chat4all.worker.http.MetricsServer;
 import chat4all.worker.kafka.KafkaMessageConsumer;
 import chat4all.worker.processing.MessageProcessor;
 import chat4all.worker.status.StatusUpdateConsumer;
@@ -88,6 +89,7 @@ public class Main {
         String kafkaGroupId = System.getenv().getOrDefault("KAFKA_GROUP_ID", "router-worker-group");
         String statusTopic = System.getenv().getOrDefault("KAFKA_TOPIC_STATUS", "status-updates");
         String statusGroupId = System.getenv().getOrDefault("KAFKA_STATUS_GROUP_ID", "status-consumer-group");
+        int metricsPort = Integer.parseInt(System.getenv().getOrDefault("HEALTH_PORT", "8082"));
         
         System.out.println("Configuration:");
         System.out.println("  Kafka: " + kafkaBootstrap);
@@ -95,7 +97,20 @@ public class Main {
         System.out.println("  Messages Group: " + kafkaGroupId);
         System.out.println("  Status Topic: " + statusTopic);
         System.out.println("  Status Group: " + statusGroupId);
+        System.out.println("  Metrics Port: " + metricsPort);
         System.out.println("===========================================\n");
+        
+        // Initialize Metrics Server (Phase 3: Observability)
+        System.out.println("▶ Initializing metrics server...");
+        MetricsServer metricsServer;
+        try {
+            metricsServer = new MetricsServer(metricsPort);
+            metricsServer.start();
+        } catch (Exception e) {
+            System.err.println("✗ Failed to start metrics server: " + e.getMessage());
+            throw new RuntimeException(e);
+        }
+        System.out.println();
         
         // Initialize Cassandra connection
         System.out.println("▶ Initializing Cassandra...");
@@ -143,6 +158,8 @@ public class Main {
         // Register shutdown hook for graceful cleanup
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             System.out.println("\n⊗ Shutdown signal received");
+            System.out.println("▶ Stopping metrics server...");
+            metricsServer.stop();
             System.out.println("▶ Stopping message consumer...");
             consumer.stop();
             System.out.println("▶ Stopping status consumer...");

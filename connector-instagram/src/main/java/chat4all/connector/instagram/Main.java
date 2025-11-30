@@ -96,6 +96,19 @@ public class Main {
         healthThread.setDaemon(false);
         healthThread.start();
         
+        // Start metrics server in background thread
+        MetricsServer metricsServer = null;
+        try {
+            metricsServer = new MetricsServer(healthPort);
+            metricsServer.start();
+        } catch (Exception e) {
+            System.err.println("❌ Failed to start metrics server: " + e.getMessage());
+            e.printStackTrace();
+        }
+        
+        // Final reference for shutdown hook
+        final MetricsServer finalMetricsServer = metricsServer;
+        
         // Shutdown hook for graceful termination
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             System.out.println("");
@@ -103,6 +116,9 @@ public class Main {
             connector.stop();
             statusPublisher.close();
             healthServer.stop();
+            if (finalMetricsServer != null) {
+                finalMetricsServer.stop();
+            }
             System.out.println("✅ Instagram connector stopped gracefully");
         }));
         

@@ -1,0 +1,121 @@
+# ============================================================================
+# Prometheus Configuration for Chat4All
+# ============================================================================
+# Purpose: Configure metrics scraping from all microservices
+# Validates: Seção 2.4 (Observabilidade) do esqueleto.md
+# ============================================================================
+
+global:
+  scrape_interval: 15s      # Scrape metrics every 15 seconds
+  evaluation_interval: 15s  # Evaluate rules every 15 seconds
+  external_labels:
+    cluster: 'chat4all-local'
+    environment: 'development'
+
+# Alerting configuration (optional for Phase 3)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+# Load rules once and periodically evaluate them
+rule_files:
+  # - "alerts.yml"
+
+# Scrape configurations
+scrape_configs:
+  # ==========================================================================
+  # Prometheus self-monitoring
+  # ==========================================================================
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # ==========================================================================
+  # API Service (Frontend)
+  # ==========================================================================
+  # Metrics exposed:
+  # - http_requests_total{method, path, status}
+  # - http_request_duration_seconds{method, path}
+  # - messages_accepted_total
+  # - messages_rejected_total{reason}
+  # - files_uploaded_total{size_bucket}
+  # - kafka_publish_duration_seconds
+  # ==========================================================================
+  - job_name: 'api-service'
+    static_configs:
+      - targets: ['api-service:8080']
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # ==========================================================================
+  # Router Worker (Event Processor)
+  # ==========================================================================
+  # Metrics exposed:
+  # - messages_consumed_total{topic, partition}
+  # - messages_processed_total{status}
+  # - messages_failed_total{reason}
+  # - kafka_consumer_lag{topic, partition}
+  # - processing_duration_seconds
+  # - cassandra_write_duration_seconds
+  # ==========================================================================
+  - job_name: 'router-worker'
+    static_configs:
+      - targets: ['router-worker:8082']
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # ==========================================================================
+  # WhatsApp Connector
+  # ==========================================================================
+  # Metrics exposed:
+  # - messages_sent_total{channel="whatsapp", status}
+  # - connector_api_duration_seconds{channel="whatsapp"}
+  # - circuit_breaker_state{channel="whatsapp"}
+  # ==========================================================================
+  - job_name: 'connector-whatsapp'
+    static_configs:
+      - targets: ['connector-whatsapp:8083']
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # ==========================================================================
+  # Instagram Connector
+  # ==========================================================================
+  # Metrics exposed:
+  # - messages_sent_total{channel="instagram", status}
+  # - connector_api_duration_seconds{channel="instagram"}
+  # - circuit_breaker_state{channel="instagram"}
+  # ==========================================================================
+  - job_name: 'connector-instagram'
+    static_configs:
+      - targets: ['connector-instagram:8084']
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # ==========================================================================
+  # Kafka Exporter (optional - requires kafka-exporter container)
+  # ==========================================================================
+  # - job_name: 'kafka'
+  #   static_configs:
+  #     - targets: ['kafka-exporter:9308']
+
+  # ==========================================================================
+  # Cassandra Exporter (optional - requires cassandra-exporter container)
+  # ==========================================================================
+  # - job_name: 'cassandra'
+  #   static_configs:
+  #     - targets: ['cassandra-exporter:9500']
+
+  # ==========================================================================
+  # MinIO Metrics (built-in)
+  # ==========================================================================
+  - job_name: 'minio'
+    metrics_path: /minio/v2/metrics/cluster
+    scheme: http
+    static_configs:
+      - targets: ['minio:9000']

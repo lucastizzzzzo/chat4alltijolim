@@ -3,6 +3,7 @@ package chat4all.worker.processing;
 import chat4all.shared.MessageEvent;
 import chat4all.worker.cassandra.CassandraMessageStore;
 import chat4all.worker.cassandra.MessageEntity;
+import chat4all.worker.metrics.WorkerMetricsRegistry;
 import chat4all.worker.routing.ConnectorRouter;
 
 import java.time.Instant;
@@ -49,6 +50,7 @@ public class MessageProcessor {
     
     private final CassandraMessageStore messageStore;
     private final ConnectorRouter connectorRouter;
+    private final WorkerMetricsRegistry metricsRegistry;
     
     /**
      * Cria MessageProcessor
@@ -59,6 +61,7 @@ public class MessageProcessor {
     public MessageProcessor(CassandraMessageStore messageStore, ConnectorRouter connectorRouter) {
         this.messageStore = messageStore;
         this.connectorRouter = connectorRouter;
+        this.metricsRegistry = WorkerMetricsRegistry.getInstance();
     }
     
     /**
@@ -100,6 +103,8 @@ public class MessageProcessor {
         String messageId = event.getMessageId();
         String conversationId = event.getConversationId();
         
+        long startTime = System.currentTimeMillis();
+        
         System.out.println("\n▶ Processing message: " + messageId + 
                          " (conv: " + conversationId + ")");
         
@@ -107,10 +112,13 @@ public class MessageProcessor {
             // [1] DEDUPLICAÇÃO - Verificar se mensagem já existe
             if (messageStore.messageExists(messageId)) {
                 System.out.println("⊗ SKIP: Message " + messageId + " already processed (duplicate)");
+                long duration = System.currentTimeMillis() - startTime;
+                metricsRegistry.recordMessageProcessed("DUPLICATE", duration);
                 return false; // Duplicada, mas não é erro (retorna success para commitar offset)
             }
             
             // [2] PERSIST - Salvar mensagem com status SENT (Phase 2: includes file attachment)
+            long cassandraStart = System.currentTimeMillis();
             MessageEntity entity = new MessageEntity(
                 event.getConversationId(),
                 Instant.ofEpochMilli(event.getTimestamp()),
@@ -123,7 +131,11 @@ public class MessageProcessor {
             );
             
             boolean saved = messageStore.saveMessage(entity);
+            long cassandraDuration = System.currentTimeMillis() - cassandraStart;
+            metricsRegistry.recordCassandraWrite(cassandraDuration, saved);
+            
             if (!saved) {
+                metricsRegistry.recordMessageFailed("cassandra_error");
                 throw new RuntimeException("Failed to save message to Cassandra");
             }
             
@@ -149,6 +161,8 @@ public class MessageProcessor {
                 if (routed) {
                     System.out.println("✓ [2/2] Routed to external connector for recipient: " + recipientId);
                     System.out.println("✓ Processing complete for message: " + messageId + " (routed to connector)");
+                    long duration = System.currentTimeMillis() - startTime;
+                    metricsRegistry.recordMessageProcessed("ROUTED", duration);
                     return true;
                 } else {
                     System.err.println("⚠ Warning: Failed to route to connector, falling back to local delivery");
@@ -163,12 +177,16 @@ public class MessageProcessor {
             System.out.println("✓ [2/2] Simulated delivery");
             
             // [5] UPDATE STATUS - Marcar como DELIVERED
+            cassandraStart = System.currentTimeMillis();
             boolean updated = messageStore.updateMessageStatus(
                 messageId, 
                 entity.getConversationId(), 
                 entity.getTimestamp(), 
                 "DELIVERED"
             );
+            cassandraDuration = System.currentTimeMillis() - cassandraStart;
+            metricsRegistry.recordCassandraWrite(cassandraDuration, updated);
+            
             if (!updated) {
                 System.err.println("⚠ Warning: Failed to update status to DELIVERED for " + messageId);
                 // Não falhar todo o processamento por isso (eventual consistency)
@@ -177,14 +195,24 @@ public class MessageProcessor {
             }
             
             System.out.println("✓ Processing complete for message: " + messageId);
+            long duration = System.currentTimeMillis() - startTime;
+            metricsRegistry.recordMessageProcessed("DELIVERED", duration);
             return true;
             
         } catch (RuntimeException e) {
             System.err.println("✗ Error processing message " + messageId + ": " + e.getMessage());
+            // Record failure metrics
+            long duration = System.currentTimeMillis() - startTime;
+            metricsRegistry.recordMessageFailed("runtime_error");
+            metricsRegistry.recordMessageProcessed("FAILED", duration);
             // Exception causa Kafka retry (não commita offset)
             throw e;
         } catch (Exception e) {
             System.err.println("✗ Error processing message " + messageId + ": " + e.getMessage());
+            // Record failure metrics
+            long duration = System.currentTimeMillis() - startTime;
+            metricsRegistry.recordMessageFailed("processing_error");
+            metricsRegistry.recordMessageProcessed("FAILED", duration);
             // Exception causa Kafka retry (não commita offset)
             throw new RuntimeException("Processing failed for message " + messageId, e);
         }

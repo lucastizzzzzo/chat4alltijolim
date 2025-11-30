@@ -4,6 +4,7 @@ import chat4all.api.auth.JwtAuthenticator;
 import chat4all.api.auth.JwtAuthenticationException;
 import chat4all.api.kafka.MessageProducer;
 import chat4all.api.messages.MessageValidator;
+import chat4all.api.metrics.MetricsRegistry;
 import chat4all.api.repository.FileRepository;
 import chat4all.api.util.JsonParser;
 import chat4all.api.util.ValidationException;
@@ -73,6 +74,7 @@ public class MessagesHandler implements HttpHandler {
     private final MessageProducer producer;
     private final JwtAuthenticator authenticator;
     private final FileRepository fileRepository; // Phase 2: File attachment validation
+    private final MetricsRegistry metricsRegistry; // Phase 3: Metrics
     
     /**
      * Creates MessagesHandler
@@ -93,6 +95,7 @@ public class MessagesHandler implements HttpHandler {
         this.producer = producer;
         this.authenticator = authenticator;
         this.fileRepository = fileRepository;
+        this.metricsRegistry = MetricsRegistry.getInstance();
     }
     
     /**
@@ -130,6 +133,7 @@ public class MessagesHandler implements HttpHandler {
             String authHeader = exchange.getRequestHeaders().getFirst("Authorization");
             
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                metricsRegistry.recordMessageRejected("auth_missing");
                 sendErrorResponse(exchange, 401, "Missing or invalid Authorization header. Expected: Bearer <token>");
                 return;
             }
@@ -140,6 +144,7 @@ public class MessagesHandler implements HttpHandler {
             try {
                 authenticatedUserId = authenticator.validateToken(token);
             } catch (JwtAuthenticationException e) {
+                metricsRegistry.recordMessageRejected("auth_invalid");
                 sendErrorResponse(exchange, 401, "Authentication failed: " + e.getMessage());
                 return;
             }
@@ -222,9 +227,15 @@ public class MessagesHandler implements HttpHandler {
             
             String kafkaEventJson = JsonParser.toJson(kafkaEvent);
             
-            // 9. Publish to Kafka (async)
+            // 9. Publish to Kafka (async) and record metrics
             String conversationId = (String) messageData.get("conversation_id");
+            long kafkaStartTime = System.currentTimeMillis();
             producer.publish(conversationId, kafkaEventJson);
+            long kafkaDuration = System.currentTimeMillis() - kafkaStartTime;
+            metricsRegistry.recordKafkaPublish(kafkaDuration);
+            
+            // Record message accepted
+            metricsRegistry.recordMessageAccepted();
             
             // 10. Return 202 Accepted
             Map<String, Object> response = new HashMap<>();
@@ -237,14 +248,17 @@ public class MessagesHandler implements HttpHandler {
             
         } catch (ValidationException e) {
             // Validation error → 400 Bad Request
+            metricsRegistry.recordMessageRejected("validation_failed");
             sendErrorResponse(exchange, 400, e.getMessage());
             
         } catch (IOException e) {
             // I/O error → 500 Internal Error
+            metricsRegistry.recordMessageRejected("io_error");
             sendErrorResponse(exchange, 500, "Internal server error: I/O error");
             
         } catch (Exception e) {
             // Unexpected error → 500 Internal Error
+            metricsRegistry.recordMessageRejected("internal_error");
             sendErrorResponse(exchange, 500, "Internal server error");
         }
     }

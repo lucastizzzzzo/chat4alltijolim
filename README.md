@@ -343,6 +343,75 @@ See **[cli/README.md](cli/README.md)** for complete CLI documentation.
    • Status DELIVERED: 6/6
 ```
 
+## 📊 Observability & Monitoring (Entrega 3)
+
+### Access Dashboards
+
+```bash
+# Prometheus (metrics database)
+open http://localhost:9090
+
+# Grafana (visualization)
+open http://localhost:3000
+# Credentials: admin / admin
+```
+
+### Pre-configured Dashboards
+
+1. **System Overview** - All services health, throughput, errors
+2. **API Service** - HTTP requests, latency P95/P99, validation errors
+3. **Router Worker** - Kafka consumer lag, processing time, routing
+4. **Connectors** - Message delivery, API duration, circuit breakers
+
+### Key Metrics
+
+**Prometheus Queries:**
+```promql
+# Messages per minute
+rate(messages_accepted_total[1m]) * 60
+
+# P95 HTTP latency
+histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
+
+# Error rate percentage
+(sum(rate(messages_rejected_total[5m])) / sum(rate(http_requests_total[5m]))) * 100
+
+# Kafka consumer lag
+max(kafka_consumer_lag) by (topic, partition)
+```
+
+### Load Testing
+
+**Run baseline test (20 VUs, 5 min):**
+```bash
+k6 run scripts/load-tests/02-baseline.js
+```
+
+**Expected results:**
+- Throughput: > 500 msg/min
+- P95 Latency: < 200ms
+- Error Rate: < 0.5%
+
+**Run spike test (store-and-forward validation):**
+```bash
+k6 run scripts/load-tests/03-spike.js
+```
+
+**See results:**
+- `results/SCALING_RESULTS.md` - Scalability analysis
+- `results/FAULT_TOLERANCE_RESULTS.md` - Failover testing
+- `RELATORIO_TECNICO_ENTREGA3.md` - Complete technical report
+
+### Performance Metrics (Validated)
+
+| Metric | Target | Achieved | Status |
+|--------|--------|----------|--------|
+| Throughput | 500-600 msg/min | **753 msg/min** | ✅ 126% |
+| P95 Latency | < 200ms | **2.39ms** | ✅ 1.2% |
+| P99 Latency | < 500ms | **4.85ms** | ✅ 1.0% |
+| Error Rate | < 0.5% | **0.00%** | ✅ 0% |
+| Uptime (Failover) | > 99% | **100%** | ✅ |
+
 ## 🔧 Development
 
 ### Running Locally (without Docker)
@@ -925,6 +994,18 @@ For questions about this educational project:
 
 ## 📊 Project Status
 
+**Entrega 3 (Semana 9-11): ✅ COMPLETE**
+
+- [x] Observability stack (Prometheus + Grafana)
+- [x] 4 auto-provisioned Grafana dashboards
+- [x] Metrics instrumentation (API, Router, Connectors)
+- [x] Load testing with k6 (baseline, spike, file upload)
+- [x] Performance validation (753 msg/min, P95 2.39ms, 0% errors)
+- [x] Horizontal scalability tests (1 vs 2 workers)
+- [x] Fault tolerance validation (worker failover, store-and-forward)
+- [x] Technical report (RELATORIO_TECNICO_ENTREGA3.md)
+- [x] ADRs 005-006 (Circuit Breakers, Observability Strategy)
+
 **Entrega 2 (Semana 7-8): ✅ COMPLETE**
 
 - [x] File upload/download (MinIO, presigned URLs, 2GB support)
@@ -933,8 +1014,6 @@ For questions about this educational project:
 - [x] Status lifecycle (SENT → DELIVERED → READ)
 - [x] Integration tests (test-file-connectors-e2e.sh - 100% PASS)
 - [x] Documentation (ADRs 002-004, comprehensive comments)
-
-**Previous Deliverables:**
 
 **Entrega 1 (Semana 3-4): ✅ COMPLETE**
 
@@ -946,9 +1025,6 @@ For questions about this educational project:
 - [x] Teste de comunicação entre 2 usuários
 - [x] Documentação completa
 - [x] Docker Compose funcional
-
-**Next Deliverables:**
-- Entrega 3: Technical report and performance testing
 
 ---
 

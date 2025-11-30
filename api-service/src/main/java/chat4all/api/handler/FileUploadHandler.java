@@ -1,5 +1,6 @@
 package chat4all.api.handler;
 
+import chat4all.api.metrics.MetricsRegistry;
 import chat4all.api.repository.FileRepository;
 import chat4all.api.storage.MinioClientFactory;
 import chat4all.shared.FileEvent;
@@ -74,6 +75,7 @@ public class FileUploadHandler implements HttpHandler {
     private final FileRepository fileRepository;
     private final MinioClient minioClient;
     private final String bucketName;
+    private final MetricsRegistry metricsRegistry;
     
     // Configuration
     private static final long MAX_FILE_SIZE = 2L * 1024 * 1024 * 1024; // 2GB
@@ -93,6 +95,7 @@ public class FileUploadHandler implements HttpHandler {
         this.fileRepository = fileRepository;
         this.minioClient = MinioClientFactory.getInstance();
         this.bucketName = MinioClientFactory.getBucketName();
+        this.metricsRegistry = MetricsRegistry.getInstance();
         System.out.println("[FileUploadHandler] Initialized with bucket: " + bucketName);
     }
     
@@ -175,6 +178,9 @@ public class FileUploadHandler implements HttpHandler {
             
             // Save metadata to Cassandra
             fileRepository.save(fileEvent);
+            
+            // Record file upload metrics
+            metricsRegistry.recordFileUploaded(uploadResult.actualSize);
             
             // Build JSON response
             String jsonResponse = buildSuccessResponse(fileEvent);

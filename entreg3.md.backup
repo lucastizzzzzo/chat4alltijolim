@@ -1,0 +1,110 @@
+**Semana 5– 6 – Object Storage e Connectors Mock (Instagram/WhatsApp)**
+
+**Objetivo:**
+
+Estender o sistema com suporte a envio de arquivos (até 2 GB) e simular
+integração multiplataforma com _connectors mock_ que representam APIs
+externas.
+
+**Atividades:**
+
+1. **Implementar upload e armazenamento de arquivos**
+    o Adotar Object Storage (MinIO / S3).
+    o Implementar upload multipart (resumable).
+    o Registrar metadados no banco (file_id, checksum, tamanho,
+       uploader, conversation_id).
+    o Permitir download via URL temporária (presigned URL).
+2. **Adicionar suporte a mensagens com anexos**
+    o API POST /v1/messages aceita payload com type: "file" e file_id.
+3. **Criar connectors mock**
+    o Criar serviço connector_whatsapp_mock e
+       connector_instagram_mock.
+    o Cada connector deve:
+       ▪ Receber mensagens de um tópico Kafka específico.
+
+```
+▪ Simular envio com logs ([WhatsApp] Entregue a usuário X).
+▪ Retornar callback simulando entrega/leitura.
+o Implementar endpoints para receber mensagens simuladas desses
+canais.
+```
+4. **Controle de status da mensagem**
+    o Implementar transições automáticas: SENT → DELIVERED → READ
+       (simulado).
+    o Atualizar status no banco e notificar via websocket ou webhook
+       (callback HTTP).
+5. **Testes integrados**
+
+
+```
+o Enviar mensagens e arquivos via API, verificar armazenamento e
+logs dos connectors mock.
+o Testar múltiplos usuários conectados simultaneamente.
+```
+6. **Documentação**
+    o Atualizar OpenAPI com endpoints de upload e novos campos.
+    o Registrar no relatório técnico os fluxos de entrega e leitura.
+
+**Entregas esperadas:**
+
+- Object Storage funcional (upload/download).
+- Connectors mock operacionais.
+- Mensagens com arquivos e estados funcionando.
+- Demonstração de fluxo completo de envio/entrega/leitura simulada.
+- Logs e capturas de tela no relatório técnico.
+
+🗓 **Semana 7– 8 – Testes de Carga, Monitoramento e Relatório Final**
+
+**Objetivo:**
+
+Validar escalabilidade horizontal, tolerância a falhas e qualidade operacional da
+plataforma Chat4All.
+
+**Atividades:**
+
+1. **Escalabilidade horizontal**
+    o Executar múltiplas instâncias do router-worker e do connector.
+    o Demonstrar aumento de throughput ao adicionar nós.
+    o Simular falha de um worker e observar redistribuição automática de
+       carga.
+2. **Testes de carga**
+    o Usar k6, Locust ou Gatling para simular múltiplos usuários.
+    o Gerar métricas: mensagens/segundo, latência média, erros.
+    o Armazenar resultados e gráficos.
+3. **Monitoramento e observabilidade**
+    o Integrar Prometheus e Grafana (ou similar).
+
+
+```
+o Expor métricas dos serviços:
+▪ messages_processed_total, latency_ms, errors_total,
+cpu_mem_usage.
+o Criar dashboards básicos com gráficos em tempo real.
+```
+4. **Tolerância a falhas**
+    o Derrubar propositalmente um nó do middleware (worker/API).
+    o Observar recuperação e reprocessamento de mensagens.
+    o Registrar comportamento no relatório.
+5. **Relatório técnico final**
+    o Estrutura:
+1. Introdução e objetivos.
+2. Arquitetura final implementada.
+3. Decisões técnicas.
+4. Testes de carga e métricas coletadas.
+5. Falhas simuladas e recuperação.
+6. Limitações e melhorias futuras.
+6. **Demonstração prática**
+o Mostrar fluxo: usuário envia mensagem → persistência → connector →
+callback de leitura.
+o Exibir dashboards em tempo real durante a execução.
+o Enviar arquivo grande (~1 GB) e comprovar estabilidade.
+
+**Entregas esperadas:**
+
+- Logs e relatórios de teste de carga.
+- Dashboards de métricas (capturas ou exportações).
+- Demonstração funcional de failover.
+- Relatório técnico completo e finalizado.
+- Vídeo curto da apresentação (opcional).
+
+

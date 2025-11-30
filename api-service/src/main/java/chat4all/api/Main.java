@@ -8,8 +8,11 @@ import chat4all.api.handler.FileDownloadHandler;
 import chat4all.api.handler.FileUploadHandler;
 import chat4all.api.http.AuthHandler;
 import chat4all.api.http.ConversationsHandler;
+import chat4all.api.http.HealthCheckHandler;
 import chat4all.api.http.MessagesHandler;
 import chat4all.api.http.MessageStatusHandler;
+import chat4all.api.http.MetricsHandler;
+import chat4all.api.http.MetricsInterceptor;
 import chat4all.api.kafka.MessageProducer;
 import chat4all.api.messages.MessageValidator;
 import chat4all.api.repository.FileRepository;
@@ -103,16 +106,18 @@ public class Main {
         ConversationsHandler conversationsHandler = new ConversationsHandler(messageRepository, jwtAuthenticator, fileRepository);
         FileUploadHandler fileUploadHandler = new FileUploadHandler(fileRepository);
         FileDownloadHandler fileDownloadHandler = new FileDownloadHandler(fileRepository);
+        HealthCheckHandler healthCheckHandler = new HealthCheckHandler(cassandraConnection.getSession(), messageProducer);
+        MetricsHandler metricsHandler = new MetricsHandler();
         
         // 4. Create and configure HTTP server
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
         
-        // Register routes
-        server.createContext("/auth/token", authHandler);
-        server.createContext("/v1/messages", messagesHandler);
-        server.createContext("/v1/conversations/", conversationsHandler); // Note: trailing slash for path matching
-        server.createContext("/v1/files", fileUploadHandler);
-        server.createContext("/v1/files/", fileDownloadHandler); // Matches /v1/files/{id}/download
+        // Register routes (wrapped with MetricsInterceptor for automatic metrics)
+        server.createContext("/auth/token", new MetricsInterceptor(authHandler));
+        server.createContext("/v1/messages", new MetricsInterceptor(messagesHandler));
+        server.createContext("/v1/conversations/", new MetricsInterceptor(conversationsHandler)); // Note: trailing slash for path matching
+        server.createContext("/v1/files", new MetricsInterceptor(fileUploadHandler));
+        server.createContext("/v1/files/", new MetricsInterceptor(fileDownloadHandler)); // Matches /v1/files/{id}/download
         
         // Phase 8: Status Lifecycle - Mark message as read endpoint
         // Pattern: /v1/messages/{message_id}/read
@@ -140,6 +145,10 @@ public class Main {
             exchange.getResponseBody().close();
         });
         
+        // Observability endpoints (Phase 3)
+        server.createContext("/actuator/health", healthCheckHandler);
+        server.createContext("/actuator/prometheus", metricsHandler);
+        
         // Use default executor (creates thread pool)
         server.setExecutor(null);
         
@@ -162,7 +171,9 @@ public class Main {
         System.out.println("  GET  /v1/conversations/{id}/messages          - Get message history (requires JWT)");
         System.out.println("  POST /v1/files                                - Upload file (requires JWT)");
         System.out.println("  GET  /v1/files/{id}/download                  - Get download URL (requires JWT)");
-        System.out.println("  GET  /health                                  - Health check");
+        System.out.println("  GET  /health                                  - Health check (liveness)");
+        System.out.println("  GET  /actuator/health                         - Health check (readiness)");
+        System.out.println("  GET  /actuator/prometheus                     - Prometheus metrics");
         System.out.println("\nPress Ctrl+C to stop.");
     }
 }
