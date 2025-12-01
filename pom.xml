@@ -28,6 +28,7 @@
         <module>router-worker</module>
         <module>connector-whatsapp</module>
         <module>connector-instagram</module>
+        <module>websocket-gateway</module>
     </modules>
 
     <properties>

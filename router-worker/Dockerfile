@@ -23,6 +23,7 @@ RUN mvn clean package -DskipTests -pl router-worker -am
 
 # ============================================================================
 # Runtime stage (smaller image)
+COPY websocket-gateway/pom.xml websocket-gateway/pom.xml
 # ============================================================================
 FROM eclipse-temurin:17-jre-alpine
 

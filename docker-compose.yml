@@ -93,6 +93,28 @@ services:
       start_period: 60s
 
   # ==========================================================================
+  # REDIS
+  # ==========================================================================
+  # Purpose: Pub/Sub event bus for real-time WebSocket notifications
+  # Educational notes:
+  # - Ultra-low latency: notifications delivered < 10ms
+  # - Pattern-based subscriptions: notifications:*
+  # - Scales WebSocket gateway instances via broadcast
+  # ==========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: chat4all-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - chat4all-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================================================
   # MINIO (Object Storage)
   # ==========================================================================
   # Purpose: S3-compatible object storage for files up to 2GB
@@ -232,6 +254,7 @@ services:
   # - Manual commit: ensures at-least-once delivery
   # - Idempotency: deduplication by message_id
   # - Scale with: docker-compose up --scale router-worker=3
+  # - Publishes notifications to Redis for WebSocket delivery
   # ==========================================================================
   router-worker:
     build:
@@ -242,6 +265,8 @@ services:
         condition: service_healthy
       cassandra-init:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
     environment:
       # Kafka configuration
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
@@ -253,6 +278,10 @@ services:
       CASSANDRA_CONTACT_POINTS: cassandra
       CASSANDRA_PORT: 9042
       CASSANDRA_KEYSPACE: chat4all
+      
+      # Redis configuration (for notifications)
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       
       # Worker configuration
       LOG_LEVEL: INFO
@@ -324,6 +353,46 @@ services:
       LOG_LEVEL: INFO
     ports:
       - "8084:8084"  # Health check endpoint
+    networks:
+      - chat4all-network
+    restart: on-failure
+
+  # ==========================================================================
+  # WEBSOCKET GATEWAY
+  # ==========================================================================
+  # Purpose: Real-time notification delivery via WebSocket
+  # Characteristics: STATELESS with sticky sessions (maintains connections)
+  # Educational notes:
+  # - Persistent connections: reduces latency to < 100ms
+  # - Redis Pub/Sub: scales horizontally (multiple gateway instances)
+  # - JWT authentication: validates token in WebSocket handshake
+  # - Metrics: connections_active, notifications_sent_total
+  # - Scale with: docker-compose up --scale websocket-gateway=3
+  # ==========================================================================
+  websocket-gateway:
+    build:
+      context: ./websocket-gateway
+      dockerfile: Dockerfile
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      # WebSocket configuration
+      WEBSOCKET_PORT: 8085
+      METRICS_PORT: 9095
+      
+      # Redis configuration
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      
+      # JWT configuration (must match API service)
+      JWT_SECRET: 'chat4all-secret-key-change-in-production'
+      
+      # Service configuration
+      LOG_LEVEL: INFO
+    ports:
+      - "8085:8085"  # WebSocket endpoint
+      - "9095:9095"  # Prometheus metrics
     networks:
       - chat4all-network
     restart: on-failure

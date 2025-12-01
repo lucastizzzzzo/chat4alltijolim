@@ -1,6 +1,8 @@
 package chat4all.api.util;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -108,6 +110,8 @@ public class JsonParser {
         StringBuilder currentToken = new StringBuilder();
         boolean insideQuotes = false;
         boolean escapeNext = false;
+        int bracketDepth = 0;
+        int braceDepth = 0;
         
         for (int i = 0; i < json.length(); i++) {
             char c = json.charAt(i);
@@ -131,7 +135,19 @@ public class JsonParser {
                 continue;
             }
             
-            if (c == ',' && !insideQuotes) {
+            if (!insideQuotes) {
+                if (c == '[') {
+                    bracketDepth++;
+                } else if (c == ']') {
+                    bracketDepth--;
+                } else if (c == '{') {
+                    braceDepth++;
+                } else if (c == '}') {
+                    braceDepth--;
+                }
+            }
+            
+            if (c == ',' && !insideQuotes && bracketDepth == 0 && braceDepth == 0) {
                 // End of key-value pair
                 parseAndAddPair(currentToken.toString().trim(), result);
                 currentToken.setLength(0); // Clear buffer
@@ -194,6 +210,8 @@ public class JsonParser {
     private static int findColonIndex(String pair) {
         boolean insideQuotes = false;
         boolean escapeNext = false;
+        int bracketDepth = 0;
+        int braceDepth = 0;
         
         for (int i = 0; i < pair.length(); i++) {
             char c = pair.charAt(i);
@@ -213,8 +231,18 @@ public class JsonParser {
                 continue;
             }
             
-            if (c == ':' && !insideQuotes) {
-                return i;
+            if (!insideQuotes) {
+                if (c == '[') {
+                    bracketDepth++;
+                } else if (c == ']') {
+                    bracketDepth--;
+                } else if (c == '{') {
+                    braceDepth++;
+                } else if (c == '}') {
+                    braceDepth--;
+                } else if (c == ':' && bracketDepth == 0 && braceDepth == 0) {
+                    return i;
+                }
             }
         }
         
@@ -235,6 +263,11 @@ public class JsonParser {
      */
     private static Object parseValue(String valueStr) {
         valueStr = valueStr.trim();
+        
+        // Array value (empty or with elements)
+        if (valueStr.startsWith("[") && valueStr.endsWith("]")) {
+            return parseArray(valueStr);
+        }
         
         // String value
         if (valueStr.startsWith("\"") && valueStr.endsWith("\"")) {
@@ -265,6 +298,64 @@ public class JsonParser {
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("Invalid JSON value: " + valueStr);
         }
+    }
+    
+    /**
+     * Parse JSON array string into List
+     * 
+     * EXAMPLES:
+     * - "[]" -> empty List
+     * - '["a","b","c"]' -> List("a", "b", "c")
+     * - '[1,2,3]' -> List(1L, 2L, 3L)
+     * - '["user1","user2"]' -> List("user1", "user2")
+     * 
+     * @param arrayStr Array string (must start with [ and end with ])
+     * @return List of parsed values
+     */
+    private static List<Object> parseArray(String arrayStr) {
+        List<Object> result = new ArrayList<>();
+        
+        // Remove [ and ]
+        String content = arrayStr.substring(1, arrayStr.length() - 1).trim();
+        
+        // Empty array
+        if (content.isEmpty()) {
+            return result;
+        }
+        
+        // Split by comma (simple approach - doesn't handle nested arrays/objects)
+        // For this project, we only need arrays of strings/numbers
+        int depth = 0;
+        int start = 0;
+        boolean inString = false;
+        
+        for (int i = 0; i < content.length(); i++) {
+            char c = content.charAt(i);
+            
+            if (c == '"' && (i == 0 || content.charAt(i - 1) != '\\')) {
+                inString = !inString;
+            } else if (!inString) {
+                if (c == '[' || c == '{') {
+                    depth++;
+                } else if (c == ']' || c == '}') {
+                    depth--;
+                } else if (c == ',' && depth == 0) {
+                    String element = content.substring(start, i).trim();
+                    if (!element.isEmpty()) {
+                        result.add(parseValue(element));
+                    }
+                    start = i + 1;
+                }
+            }
+        }
+        
+        // Add last element
+        String lastElement = content.substring(start).trim();
+        if (!lastElement.isEmpty()) {
+            result.add(parseValue(lastElement));
+        }
+        
+        return result;
     }
     
     /**

@@ -1,42 +1,58 @@
-# Entrega 2 - Sumário Executivo
+# Chat4All - Sumário Executivo (Completo)
 
-**Chat4All: Object Storage e Connectors Multi-Plataforma**  
-**Status:** ✅ COMPLETO (112/112 tasks, 100%)  
-**Data:** Novembro 2025
+**Chat4All: Plataforma de Mensagens Distribuídas**  
+**Status:** ✅ COMPLETO (Entrega 3 Finalizada)  
+**Versão:** 1.0.0 (Production-ready)  
+**Data:** Novembro 2024
 
 ---
 
-## 🎯 Objetivos Alcançados
+## 🎯 Objetivos Alcançados (Todas as Entregas)
 
-### ✅ Object Storage Funcional
+### ✅ Entrega 1: Mensageria Básica
+- REST API (POST /v1/messages, GET /v1/conversations/{id}/messages)
+- Autenticação JWT
+- Integração Kafka (3 partições, particionamento por conversation_id)
+- Persistência Cassandra
+- Router Worker (consumer → persistence)
+- Transições de status: SENT → DELIVERED
+- Docker Compose funcional (6 containers)
+- Testes E2E automatizados
+
+### ✅ Entrega 2: Object Storage e Connectors
 - MinIO integrado (S3-compatible)
 - Upload streaming até 2GB (memória constante: 8KB)
 - Download via presigned URLs (seguro, 1h de expiração)
 - SHA-256 checksums para integridade
-- **Performance**: Upload 1GB em 92s (~11 MB/s)
-
-### ✅ Connectors Mock Operacionais
 - WhatsApp Connector (microservice independente)
 - Instagram Connector (microservice independente)
 - Roteamento automático por `recipient_id` prefix
 - Status updates via Kafka (DELIVERED)
+- Ciclo de vida: SENT → DELIVERED → READ
+- Endpoint POST /v1/messages/{id}/read
+- **Performance**: Upload 1GB em 92s (~11 MB/s)
 - **Latência**: ~2.15s média para entrega
 
-### ✅ Mensagens com Arquivos
-- API aceita `file_id` no payload
-- Metadata em Cassandra (linkage message ↔ file)
-- Suporte a múltiplas plataformas
+### ✅ Entrega 3: Observabilidade e Validação
+- Stack completa: Prometheus + Grafana
+- 4 dashboards auto-provisionados (System, API, Router, Connectors)
+- Métricas instrumentadas (HTTP duration, Kafka lag, Circuit breakers)
+- Load testing com k6 (baseline, spike, file upload)
+- Validação de escalabilidade horizontal (1 vs 2 workers)
+- Testes de tolerância a falhas (worker failover, store-and-forward)
+- **Throughput**: 753 msg/min (126% acima da meta)
+- **P95 Latency**: 2.39ms (99% abaixo da meta)
+- **Error Rate**: 0.00%
+- **Uptime (Failover)**: 100%
 
-### ✅ Ciclo de Vida de Status
-- Transições automáticas: SENT → DELIVERED → READ
-- Endpoint POST /v1/messages/{id}/read
-- Timestamps: delivered_at, read_at
-- Idempotência garantida
-
-### ✅ Testes Integrados
-- **test-file-connectors-e2e.sh**: 100% PASS (10 passos, 7 pontos de integração)
-- **demo-file-sharing.sh**: Demo interativo completo
-- Validação E2E de todo o sistema
+### ✅ WebSocket Real-Time Notifications (Extra)
+- WebSocket Gateway (Java 11 + Java-WebSocket 1.5.3)
+- Autenticação JWT via query parameter
+- Redis Pub/Sub para broadcasting (PSUBSCRIBE notifications:*)
+- Notificações push em tempo real (< 150ms)
+- Script de teste E2E Python (test-websocket-notifications.py)
+- **Latência média**: ~140ms
+- **Taxa de sucesso**: 100% (6/6 notificações testadas)
 
 ---
 

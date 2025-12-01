@@ -2,6 +2,10 @@ package chat4all.api.http;
 
 import chat4all.api.auth.TokenGenerator;
 import chat4all.api.util.JsonParser;
+import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.cql.PreparedStatement;
+import com.datastax.oss.driver.api.core.cql.ResultSet;
+import com.datastax.oss.driver.api.core.cql.Row;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
@@ -93,33 +97,40 @@ public class AuthHandler implements HttpHandler {
     private final TokenGenerator tokenGenerator;
     
     /**
-     * Usuários válidos (HARDCODED - apenas para demonstração).
-     * 
-     * EM PRODUÇÃO:
-     * - Mover para Cassandra: SELECT password_hash FROM users WHERE username = ?
-     * - Usar bcrypt para hash: BCrypt.checkpw(plainPassword, hashedPassword)
-     * - Adicionar salt único por usuário
-     * - Considerar rate limiting (max 5 tentativas por minuto)
-     * 
-     * ESTRUTURA:
-     * - Chave: username
-     * - Valor: password (plain text - INSEGURO! Use hash em produção)
+     * Sessão Cassandra para buscar usuários do banco.
      */
-    private static final Map<String, String> VALID_USERS = Map.of(
+    private final com.datastax.oss.driver.api.core.CqlSession session;
+    private final com.datastax.oss.driver.api.core.cql.PreparedStatement selectUserStatement;
+    
+    /**
+     * Usuários válidos (HARDCODED - fallback para compatibilidade).
+     */
+    private static final Map<String, String> FALLBACK_USERS = Map.of(
         "user_a", "pass_a",
-        "user_b", "pass_b"
+        "user_b", "pass_b",
+        "user_c", "pass_c"
     );
     
     /**
      * Construtor do AuthHandler.
      * 
      * @param tokenGenerator Gerador de tokens JWT (injetado para testabilidade)
+     * @param session Sessão Cassandra para buscar usuários
      */
-    public AuthHandler(TokenGenerator tokenGenerator) {
+    public AuthHandler(TokenGenerator tokenGenerator, com.datastax.oss.driver.api.core.CqlSession session) {
         if (tokenGenerator == null) {
             throw new IllegalArgumentException("TokenGenerator cannot be null");
         }
         this.tokenGenerator = tokenGenerator;
+        this.session = session;
+        
+        if (session != null) {
+            this.selectUserStatement = session.prepare(
+                "SELECT user_id, password FROM chat4all.users WHERE username = ? ALLOW FILTERING"
+            );
+        } else {
+            this.selectUserStatement = null;
+        }
     }
     
     /**
@@ -208,23 +219,50 @@ public class AuthHandler implements HttpHandler {
             }
             
             // 5. Verificação de credenciais
-            // Em produção: SELECT password_hash FROM users WHERE username = ?
-            // Em produção: BCrypt.checkpw(password, passwordHash)
-            if (!VALID_USERS.containsKey(username)) {
-                // Log: Authentication failed - user not found
-                sendErrorResponse(exchange, 401, "Invalid credentials");
-                return;
+            // Consulta o banco de dados primeiro
+            // Em produção: usar BCrypt.checkpw(password, passwordHash) para comparação segura
+            
+            String userId = null;
+            boolean authenticated = false;
+            
+            try {
+                // Tenta autenticar via banco de dados
+                ResultSet result = session.execute(selectUserStatement.bind(username));
+                Row user = result.one();
+                
+                if (user != null) {
+                    // Usuário encontrado no banco
+                    String storedPassword = user.getString("password");
+                    userId = user.getString("user_id");
+                    
+                    // NOTA: Em produção, usar BCrypt.checkpw(password, storedPassword)
+                    // Aqui estamos usando comparação direta apenas para fins educacionais
+                    if (password.equals(storedPassword)) {
+                        authenticated = true;
+                    }
+                }
+            } catch (Exception dbException) {
+                // Log do erro de banco (não expor ao usuário)
+                // Continua para tentar fallback de usuários hardcoded
             }
             
-            String expectedPassword = VALID_USERS.get(username);
-            if (!expectedPassword.equals(password)) {
-                // Log: Authentication failed - invalid password
+            // Fallback para usuários hardcoded (mantém compatibilidade com user_a, user_b, user_c)
+            if (!authenticated) {
+                if (FALLBACK_USERS.containsKey(username) && FALLBACK_USERS.get(username).equals(password)) {
+                    userId = username; // Para usuários hardcoded, username = userId
+                    authenticated = true;
+                }
+            }
+            
+            // Se não autenticou nem via banco nem via fallback
+            if (!authenticated) {
+                // Log: Authentication failed - invalid credentials
                 sendErrorResponse(exchange, 401, "Invalid credentials");
                 return;
             }
             
             // 6. Geração de token JWT
-            String token = tokenGenerator.generateToken(username);
+            String token = tokenGenerator.generateToken(userId);
             
             // 7. Resposta de sucesso (formato OAuth 2.0 RFC 6749)
             String responseJson = String.format(

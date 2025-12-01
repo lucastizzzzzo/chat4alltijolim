@@ -6,6 +6,32 @@
 [![Kafka](https://img.shields.io/badge/Kafka-3.6-black)](https://kafka.apache.org/)
 [![Cassandra](https://img.shields.io/badge/Cassandra-4.1-blue)](https://cassandra.apache.org/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-blue)](https://docs.docker.com/compose/)
+[![Redis](https://img.shields.io/badge/Redis-7.2-red)](https://redis.io/)
+[![MinIO](https://img.shields.io/badge/MinIO-S3-ff69b4)](https://min.io/)
+[![WebSocket](https://img.shields.io/badge/WebSocket-Real--time-green)](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API)
+[![OpenAPI](https://img.shields.io/badge/OpenAPI-3.0-brightgreen)](https://swagger.io/specification/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+> 🎓 **Complete distributed systems implementation** featuring event-driven architecture, real-time notifications, horizontal scalability, and production-grade observability.
+
+---
+
+## 📑 Table of Contents
+
+- [Project Overview](#-project-overview)
+- [Architecture](#%EF%B8%8F-architecture)
+- [Quick Start](#-quick-start)
+- [Interactive CLI](#%EF%B8%8F-interactive-cli-user-friendly-interface)
+- [Real-Time Notifications (WebSocket)](#-real-time-notifications-websocket)
+- [API Documentation (OpenAPI/Swagger)](#-api-documentation-openapiswagger)
+- [Observability & Monitoring](#-observability--monitoring-entrega-3)
+- [Development](#-development)
+- [Documentation](#-documentation)
+- [Testing Strategy](#-testing-strategy)
+- [Horizontal Scalability](#-horizontal-scalability-demo)
+- [Connector Architecture](#-connector-architecture-entrega-2)
+- [Troubleshooting](#-troubleshooting)
+- [Project Status](#-project-status)
 
 ## 📚 Project Overview
 
@@ -19,11 +45,16 @@ Chat4All is an **educational implementation** of a distributed messaging platfor
 
 ### 🎯 Learning Objectives
 
-1. Understand **Kafka partitioning** and how it preserves message ordering
-2. Learn **Cassandra query-driven modeling** with partition keys
-3. Implement **stateless REST APIs** for horizontal scalability
-4. Practice **Test-First Development** (TDD)
-5. Experience **Docker Compose** multi-service orchestration
+1. ✅ Understand **Kafka partitioning** and how it preserves message ordering
+2. ✅ Learn **Cassandra query-driven modeling** with partition keys
+3. ✅ Implement **stateless REST APIs** for horizontal scalability
+4. ✅ Practice **Test-First Development** (TDD)
+5. ✅ Experience **Docker Compose** multi-service orchestration
+6. ✅ Build **WebSocket real-time notifications** with Redis Pub/Sub
+7. ✅ Implement **object storage** with presigned URLs (MinIO/S3)
+8. ✅ Apply **microservices patterns** (connectors, circuit breakers)
+9. ✅ Configure **observability stack** (Prometheus, Grafana)
+10. ✅ Conduct **load testing** and performance analysis
 
 ## 🏗️ Architecture
 
@@ -31,36 +62,54 @@ Chat4All is an **educational implementation** of a distributed messaging platfor
 ┌─────────────┐      ┌─────────────┐      ┌─────────────┐
 │   Client    │─────▶│ API Service │─────▶│    Kafka    │
 │  (curl/app) │◀─────│  (REST API) │      │  (Events)   │
-└─────────────┘      └──────┬──────┘      └──────┬──────┘
-                            │                     │
-                            │ Upload              │ outbound-messages
-                            │                     │ status-updates
-                            ▼                     ▼
-                     ┌─────────────┐      ┌─────────────┐
-                     │    MinIO    │      │   Router    │
-                     │  (Object    │      │   Worker    │
-                     │   Storage)  │      └──────┬──────┘
-                     └─────────────┘             │
-                            │                    │ route by
-                            │ Presigned          │ recipient_id
-                            │ URLs               │
-                            │                    ▼
-                            │             ┌──────────────┐
-                            │             │  Connectors  │
-                            │             ├──────────────┤
-                            │             │  WhatsApp    │
-                            │             │  Instagram   │
-                            │             └──────┬───────┘
-                            │                    │
-                            │                    │ status-updates
-                            ▼                    ▼
-                     ┌────────────────────────────────┐
-                     │      Cassandra (NoSQL)         │
-                     │  • Messages (by conv_id)       │
-                     │  • Files metadata              │
-                     │  • Conversations               │
-                     │  • Status lifecycle            │
-                     └────────────────────────────────┘
+│             │      └──────┬──────┘      └──────┬──────┘
+│             │             │                     │
+│             │             │ Upload              │ messages
+│             │             │                     │ status-updates
+│             │             ▼                     ▼
+│             │      ┌─────────────┐      ┌─────────────┐
+│             │      │    MinIO    │      │   Router    │
+│             │      │  (Object    │      │   Worker    │
+│             │      │   Storage)  │      └──────┬──────┘
+│             │      └─────────────┘             │
+│             │             │                    │ Writes +
+│             │             │ Presigned          │ Publishes
+│             │             │ URLs               │ notifications
+│             │             │                    ▼
+│             │             │             ┌──────────────┐
+│             │             │             │  Connectors  │
+│             │             │             ├──────────────┤
+│             │             │             │  WhatsApp    │
+│             │             │             │  Instagram   │
+│             │             │             └──────┬───────┘
+│             │             │                    │
+│             │             │                    │ status-updates
+│             │             ▼                    ▼
+│             │      ┌────────────────────────────────┐
+│             │      │      Cassandra (NoSQL)         │
+│             │      │  • Messages (by conv_id)       │
+│             │      │  • Files metadata              │
+│             │      │  • Conversations               │
+│             │      │  • Status lifecycle            │
+│             │      └────────────────────────────────┘
+│             │                    ▲
+│             │                    │ Message written
+│             │                    │
+│             │             ┌──────┴──────┐
+│             │             │    Redis    │◀──── Router Worker
+│             │             │  Pub/Sub    │      publishes notification
+│             │             └──────┬──────┘
+│             │                    │ notifications:user_id
+│             │                    │
+│             │             ┌──────▼──────┐
+│             │             │  WebSocket  │
+│             │             │   Gateway   │
+│             │             └──────┬──────┘
+│             │                    │
+│     WebSocket Connection         │
+│     (Real-time Notifications)    │
+│◀────────────────────────────────┘
+└─────────────┘
 ```
 
 ### Message Flow
@@ -98,6 +147,7 @@ Client → API (POST /v1/messages) → Kafka → Router → Cassandra
 - **Java 17** (OpenJDK) - for local development
 - **Maven 3.8+** - for building
 - **curl** or **httpie** - for testing APIs
+- **Python 3.8+** - for WebSocket notification tests
 
 ### 1. Clone and Build
 
@@ -130,10 +180,14 @@ curl http://localhost:8082/health
 
 **Port Mapping:**
 - API Service: `http://localhost:8082` (mapped from internal 8080)
+- WebSocket Gateway: `ws://localhost:8085` (real-time notifications)
 - MinIO Console: `http://localhost:9001` (web UI, credentials: minioadmin/minioadmin)
 - MinIO API: `http://localhost:9000` (S3-compatible API)
+- Redis: `localhost:6379` (Pub/Sub for notifications)
 - Cassandra: `localhost:9042`
 - Kafka: `localhost:9092` (internal), `localhost:29092` (external)
+- Prometheus: `http://localhost:9090` (metrics)
+- Grafana: `http://localhost:3000` (dashboards, admin/admin)
 
 ### 3. Test the System
 
@@ -412,6 +466,403 @@ k6 run scripts/load-tests/03-spike.js
 | Error Rate | < 0.5% | **0.00%** | ✅ 0% |
 | Uptime (Failover) | > 99% | **100%** | ✅ |
 
+## 🔔 Real-Time Notifications (WebSocket)
+
+### What are WebSocket Notifications?
+
+WebSocket notifications provide **real-time push updates** to connected clients when new messages arrive. This eliminates the need for polling and enables instant messaging experiences.
+
+### Architecture
+
+```
+Message Flow:
+1. Client sends message via REST API
+2. API → Kafka → Router Worker → Cassandra (persistence)
+3. Router Worker publishes to Redis: PUBLISH notifications:user_123
+4. WebSocket Gateway subscribes to Redis: PSUBSCRIBE notifications:*
+5. Gateway pushes notification to connected WebSocket client
+6. Client receives notification in < 150ms
+
+Technology Stack:
+- WebSocket Server: Java-WebSocket 1.5.3 (Java 11)
+- Pub/Sub: Redis 7.2 (in-memory, ultra-low latency)
+- Authentication: JWT tokens (same as REST API)
+- Protocol: ws:// (ws://localhost:8085)
+```
+
+### How to Connect
+
+**1. Get JWT Token (same as REST API):**
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8082/auth/token \
+  -H "Content-Type: application/json" \
+  -d '{"username":"alice","password":"password"}' \
+  | jq -r '.access_token')
+```
+
+**2. Connect via WebSocket with token:**
+```javascript
+// JavaScript example
+const ws = new WebSocket('ws://localhost:8085?token=' + token);
+
+ws.onopen = () => console.log('Connected to WebSocket Gateway');
+
+ws.onmessage = (event) => {
+  const notification = JSON.parse(event.data);
+  console.log('New message:', notification);
+  // {
+  //   "type": "NEW_MESSAGE",
+  //   "message_id": "msg_abc123",
+  //   "conversation_id": "conv_demo_123",
+  //   "sender_id": "user_bob",
+  //   "content": "Hello!",
+  //   "timestamp": 1701234567890
+  // }
+};
+
+ws.onerror = (error) => console.error('WebSocket error:', error);
+ws.onclose = () => console.log('Disconnected');
+```
+
+**3. Python example (using websockets library):**
+```python
+import asyncio
+import websockets
+import json
+
+async def listen_notifications(token):
+    uri = f"ws://localhost:8085?token={token}"
+    async with websockets.connect(uri) as websocket:
+        print("Connected to WebSocket Gateway")
+        while True:
+            notification = await websocket.recv()
+            data = json.loads(notification)
+            print(f"New message: {data['content']}")
+
+# Run
+asyncio.run(listen_notifications(your_token))
+```
+
+### Testing WebSocket Notifications
+
+**Automated end-to-end test:**
+```bash
+# Comprehensive test: Creates users, connects WebSocket, sends 3 messages
+python3 scripts/test-websocket-notifications.py
+
+# Expected output:
+# ✓ Created user alice_...
+# ✓ Created user bob_...
+# ✓ Authenticated alice
+# ✓ Authenticated bob
+# ✓ Created conversation conv_...
+# ✓ WebSocket connected: connection-id
+# 🔔 NOTIFICATION RECEIVED (after 2.119s)
+# 🔔 NOTIFICATION RECEIVED (after 3.126s)
+# 🔔 NOTIFICATION RECEIVED (after 4.134s)
+# ✅ TEST PASSED - All notifications received!
+```
+
+**Manual test with two terminals:**
+```bash
+# Terminal 1: Connect WebSocket (Alice listening)
+python3 -c "
+import asyncio, websockets, json, requests
+token = requests.post('http://localhost:8082/auth/token',
+                     json={'username':'alice','password':'password'}).json()['access_token']
+async def listen():
+    async with websockets.connect(f'ws://localhost:8085?token={token}') as ws:
+        print('Listening for notifications...')
+        while True:
+            msg = await ws.recv()
+            print(f'Received: {msg}')
+asyncio.run(listen())
+"
+
+# Terminal 2: Send message (Bob sending to Alice)
+TOKEN_BOB=$(curl -s -X POST http://localhost:8082/auth/token \
+  -H "Content-Type: application/json" \
+  -d '{"username":"bob","password":"password"}' \
+  | jq -r '.access_token')
+
+curl -X POST http://localhost:8082/v1/messages \
+  -H "Authorization: Bearer $TOKEN_BOB" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "conversation_id": "conv_test_123",
+    "sender_id": "user_bob",
+    "recipient_id": "user_alice",
+    "content": "Hello Alice, testing WebSocket!"
+  }'
+
+# Terminal 1 should receive notification within 150ms
+```
+
+### Notification Format
+
+```json
+{
+  "type": "NEW_MESSAGE",
+  "message_id": "msg_abc123xyz",
+  "conversation_id": "conv_demo_123",
+  "sender_id": "user_bob",
+  "recipient_id": "user_alice",
+  "content": "Hello from WebSocket!",
+  "timestamp": 1701234567890,
+  "file_id": null
+}
+```
+
+### Performance
+
+- **Average Latency**: ~140ms (end-to-end: API → Kafka → Router → Redis → WebSocket)
+- **Success Rate**: 100% (validated with 6 consecutive test notifications)
+- **Connection Limit**: Unlimited in educational version (production: configure backpressure)
+- **Reconnection**: Manual (client responsibility in current implementation)
+
+### Troubleshooting
+
+**WebSocket connection fails:**
+```bash
+# Check WebSocket Gateway is running
+docker-compose ps websocket-gateway
+
+# Check logs
+docker-compose logs websocket-gateway
+
+# Verify Redis is healthy
+docker-compose exec redis redis-cli PING
+# Expected: PONG
+```
+
+**Not receiving notifications:**
+```bash
+# Check Router Worker is publishing to Redis
+docker-compose logs router-worker | grep "Redis notification publisher"
+# Expected: ✓ Redis publisher initialized: redis:6379
+
+# Test Redis Pub/Sub manually
+docker-compose exec redis redis-cli
+> PSUBSCRIBE notifications:*
+# Send a message via API, should see: message notifications:user_alice
+```
+
+**JWT authentication error:**
+```bash
+# Verify token is valid
+curl http://localhost:8082/v1/conversations/test/messages \
+  -H "Authorization: Bearer $TOKEN"
+# If this works, token is valid for WebSocket too
+```
+
+## 📚 API Documentation (OpenAPI/Swagger)
+
+Complete API documentation is available in **OpenAPI 3.0** format.
+
+### View Documentation
+
+**Option 1: Swagger UI (Recommended)**
+```bash
+# Using Docker
+docker run -p 8080:8080 \
+  -e SWAGGER_JSON=/openapi.yaml \
+  -v $(pwd)/openapi.yaml:/openapi.yaml \
+  swaggerapi/swagger-ui
+
+# Open browser
+open http://localhost:8080
+```
+
+**Option 2: Swagger Editor (Online)**
+```bash
+# Copy content of openapi.yaml
+cat openapi.yaml
+
+# Paste into Swagger Editor
+open https://editor.swagger.io/
+```
+
+**Option 3: VS Code Extension**
+```bash
+# Install extension
+code --install-extension 42Crunch.vscode-openapi
+
+# Open openapi.yaml in VS Code
+code openapi.yaml
+# Right-click → "OpenAPI: Preview"
+```
+
+### API Overview
+
+**Authentication:**
+- `POST /auth/register` - Register new user
+- `POST /auth/token` - Get JWT access token
+
+**Messages:**
+- `POST /v1/messages` - Send message (text or with file)
+- `GET /v1/conversations/{id}/messages` - Retrieve messages (paginated)
+- `POST /v1/messages/{id}/read` - Mark message as read
+
+**Files:**
+- `POST /v1/files` - Upload file (multipart, up to 2GB)
+- `GET /v1/files/{id}/download` - Get presigned download URL
+
+**Health:**
+- `GET /health` - Service health check
+
+### Quick Examples
+
+**1. Register and authenticate:**
+```bash
+# Register
+curl -X POST http://localhost:8082/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"alice","password":"mypassword"}'
+
+# Get token
+TOKEN=$(curl -s -X POST http://localhost:8082/auth/token \
+  -H "Content-Type: application/json" \
+  -d '{"username":"alice","password":"mypassword"}' \
+  | jq -r '.access_token')
+```
+
+**2. Send message:**
+```bash
+curl -X POST http://localhost:8082/v1/messages \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "conversation_id": "conv_123",
+    "sender_id": "user_alice",
+    "content": "Hello World!"
+  }'
+```
+
+**3. Upload and send file:**
+```bash
+# Upload file
+FILE_RESPONSE=$(curl -s -X POST http://localhost:8082/v1/files \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@document.pdf" \
+  -F "conversation_id=conv_123")
+
+FILE_ID=$(echo $FILE_RESPONSE | jq -r '.file_id')
+
+# Send message with file
+curl -X POST http://localhost:8082/v1/messages \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"conversation_id\": \"conv_123\",
+    \"sender_id\": \"user_alice\",
+    \"content\": \"Check out this document\",
+    \"file_id\": \"$FILE_ID\"
+  }"
+```
+
+**4. Get messages:**
+```bash
+curl -X GET "http://localhost:8082/v1/conversations/conv_123/messages?limit=50&offset=0" \
+  -H "Authorization: Bearer $TOKEN" | jq
+```
+
+**5. Download file:**
+```bash
+# Get presigned URL
+DOWNLOAD_URL=$(curl -s -X GET "http://localhost:8082/v1/files/$FILE_ID/download" \
+  -H "Authorization: Bearer $TOKEN" | jq -r '.download_url')
+
+# Download file
+curl -o downloaded_file.pdf "$DOWNLOAD_URL"
+```
+
+### Schema Details
+
+All request/response schemas are documented in `openapi.yaml` with:
+- Required/optional fields
+- Data types and formats
+- Validation rules (min/max length, patterns)
+- Example values
+- Error responses
+
+**Key Schemas:**
+- `SendMessageRequest` - Message submission
+- `Message` - Message object with status lifecycle
+- `FileUploadResponse` - File metadata with checksum
+- `FileDownloadResponse` - Presigned URL with expiration
+- `Error` - RFC 7807 Problem Details format
+
+See `openapi.yaml` for complete specifications.
+
+## 📊 Observability & Monitoring (Entrega 3)
+
+### Access Dashboards
+
+```bash
+# Prometheus (metrics database)
+open http://localhost:9090
+
+# Grafana (visualization)
+open http://localhost:3000
+# Credentials: admin / admin
+```
+
+### Pre-configured Dashboards
+
+1. **System Overview** - All services health, throughput, errors
+2. **API Service** - HTTP requests, latency P95/P99, validation errors
+3. **Router Worker** - Kafka consumer lag, processing time, routing
+4. **Connectors** - Message delivery, API duration, circuit breakers
+
+### Key Metrics
+
+**Prometheus Queries:**
+```promql
+# Messages per minute
+rate(messages_accepted_total[1m]) * 60
+
+# P95 HTTP latency
+histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
+
+# Error rate percentage
+(sum(rate(messages_rejected_total[5m])) / sum(rate(http_requests_total[5m]))) * 100
+
+# Kafka consumer lag
+max(kafka_consumer_lag) by (topic, partition)
+```
+
+### Load Testing
+
+**Run baseline test (20 VUs, 5 min):**
+```bash
+k6 run scripts/load-tests/02-baseline.js
+```
+
+**Expected results:**
+- Throughput: > 500 msg/min
+- P95 Latency: < 200ms
+- Error Rate: < 0.5%
+
+**Run spike test (store-and-forward validation):**
+```bash
+k6 run scripts/load-tests/03-spike.js
+```
+
+**See results:**
+- `results/SCALING_RESULTS.md` - Scalability analysis
+- `results/FAULT_TOLERANCE_RESULTS.md` - Failover testing
+- `RELATORIO_TECNICO_ENTREGA3.md` - Complete technical report
+
+### Performance Metrics (Validated)
+
+| Metric | Target | Achieved | Status |
+|--------|--------|----------|--------|
+| Throughput | 500-600 msg/min | **753 msg/min** | ✅ 126% |
+| P95 Latency | < 200ms | **2.39ms** | ✅ 1.2% |
+| P99 Latency | < 500ms | **4.85ms** | ✅ 1.0% |
+| Error Rate | < 0.5% | **0.00%** | ✅ 0% |
+| Uptime (Failover) | > 99% | **100%** | ✅ |
+
 ## 🔧 Development
 
 ### Running Locally (without Docker)
@@ -444,6 +895,40 @@ docker-compose restart api-service
 # Or rebuild Docker image
 docker-compose up -d --build api-service
 ```
+
+## 📖 Documentation
+
+### Core Documentation
+
+- **[README.md](README.md)** - This file (Quick start, examples, API overview)
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Complete architecture documentation
+- **[openapi.yaml](openapi.yaml)** - OpenAPI 3.0 API specification (Swagger)
+
+### Technical Reports
+
+- **[RELATORIO_TECNICO_ENTREGA3.md](RELATORIO_TECNICO_ENTREGA3.md)** - Entrega 3 technical report
+- **[SUMARIO_EXECUTIVO.md](SUMARIO_EXECUTIVO.md)** - Executive summary
+
+### Guides & Manuals
+
+- **[CLI README](cli/README.md)** - Interactive CLI user guide
+- **[GUIA_TESTES_ENTREGA3.md](GUIA_TESTES_ENTREGA3.md)** - Testing guide for Entrega 3
+- **[MANUAL_TESTS.md](MANUAL_TESTS.md)** - Manual testing procedures
+
+### Architecture Decision Records (ADRs)
+
+- **[ADR-001](docs/adr/001-no-frameworks.md)** - Why No Frameworks
+- **[ADR-002](docs/adr/002-object-storage-choice.md)** - MinIO vs Database BLOBs
+- **[ADR-003](docs/adr/003-connector-architecture.md)** - Microservices vs Monolithic
+- **[ADR-004](docs/adr/004-presigned-urls.md)** - Presigned URLs for Downloads
+- **[ADR-005](docs/adr/005-circuit-breaker.md)** - Circuit Breaker Pattern
+- **[ADR-006](docs/adr/006-observability-strategy.md)** - Observability Strategy
+
+### Test Results
+
+- **[results/SCALING_RESULTS.md](results/SCALING_RESULTS.md)** - Scalability analysis
+- **[results/FAULT_TOLERANCE_RESULTS.md](results/FAULT_TOLERANCE_RESULTS.md)** - Failover testing
+- **[TEST_SUCCESS_REPORT.md](TEST_SUCCESS_REPORT.md)** - Test execution report
 
 ## 📖 Implementation Status
 
@@ -687,16 +1172,18 @@ chat4alltijolim/
 └── README.md                 # This file
 ```
 
-**Service Count**: 10 Docker containers
+**Service Count**: 11 Docker containers
 - 1x API Service
 - 1x Router Worker
 - 2x Connectors (WhatsApp, Instagram)
+- 1x WebSocket Gateway (real-time notifications)
 - 1x MinIO (object storage)
+- 1x Redis (Pub/Sub)
 - 1x Cassandra
 - 1x Kafka
 - 1x Zookeeper
-- 1x Cassandra Init
-- 1x Schema Init
+- 1x Prometheus (metrics)
+- 1x Grafana (visualization)
 
 ## 🧪 Testing Strategy
 

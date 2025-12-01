@@ -91,6 +91,10 @@ public class Main {
         String statusGroupId = System.getenv().getOrDefault("KAFKA_STATUS_GROUP_ID", "status-consumer-group");
         int metricsPort = Integer.parseInt(System.getenv().getOrDefault("HEALTH_PORT", "8082"));
         
+        // Redis configuration for WebSocket notifications
+        String redisHost = System.getenv().getOrDefault("REDIS_HOST", "redis");
+        int redisPort = Integer.parseInt(System.getenv().getOrDefault("REDIS_PORT", "6379"));
+        
         System.out.println("Configuration:");
         System.out.println("  Kafka: " + kafkaBootstrap);
         System.out.println("  Messages Topic: " + kafkaTopic);
@@ -98,6 +102,7 @@ public class Main {
         System.out.println("  Status Topic: " + statusTopic);
         System.out.println("  Status Group: " + statusGroupId);
         System.out.println("  Metrics Port: " + metricsPort);
+        System.out.println("  Redis: " + redisHost + ":" + redisPort);
         System.out.println("===========================================\n");
         
         // Initialize Metrics Server (Phase 3: Observability)
@@ -123,9 +128,15 @@ public class Main {
         chat4all.worker.routing.ConnectorRouter connectorRouter = new chat4all.worker.routing.ConnectorRouter(kafkaBootstrap);
         System.out.println("✓ ConnectorRouter initialized\n");
         
+        // Initialize Redis notification publisher (Phase 8: WebSocket notifications)
+        System.out.println("▶ Initializing Redis notification publisher...");
+        chat4all.worker.notifications.RedisNotificationPublisher notificationPublisher = 
+            new chat4all.worker.notifications.RedisNotificationPublisher(redisHost, redisPort);
+        System.out.println();
+        
         // Initialize message processor
         System.out.println("▶ Initializing message processor...");
-        MessageProcessor messageProcessor = new MessageProcessor(messageStore, connectorRouter);
+        MessageProcessor messageProcessor = new MessageProcessor(messageStore, connectorRouter, notificationPublisher);
         System.out.println("✓ MessageProcessor initialized\n");
         
         // Initialize Kafka consumer
@@ -171,6 +182,8 @@ public class Main {
             }
             System.out.println("▶ Closing connector router...");
             connectorRouter.close();
+            System.out.println("▶ Closing Redis notification publisher...");
+            notificationPublisher.close();
             System.out.println("▶ Closing Cassandra connection...");
             cassandraConnection.close();
             System.out.println("✓ Router Worker stopped gracefully");
