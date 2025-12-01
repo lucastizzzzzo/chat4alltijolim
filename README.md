@@ -58,6 +58,51 @@ make quickstart
 
 See **[INSTALL.md](INSTALL.md)** for detailed installation guide and **[Makefile](Makefile)** for all available commands.
 
+### ✅ Quick Automated Test
+
+After setup, run the complete automated test suite:
+
+```bash
+# Prerequisites: services must be running (make quickstart)
+# Requires: jq (JSON parser)
+
+# Install jq if not present
+sudo apt-get install -y jq   # Debian/Ubuntu
+# or: brew install jq         # macOS
+
+# Run complete test suite
+./complete_test.sh
+```
+
+**What the test does:**
+- ✅ Registers 2 test users (Alice and Bob)
+- ✅ Authenticates and obtains JWT tokens
+- ✅ Sends messages between users
+- ✅ Retrieves conversation history
+- ✅ Uploads and shares files
+- ✅ Validates system health
+
+**Expected output:**
+```
+🚀 Chat4All Complete Test Suite
+================================
+
+✓ API Service is running
+✓ Alice registered (User ID: 4a926bec-3c6d-4e7b-ac84-f2fd6eac71b7)
+✓ Bob registered (User ID: fd832513-b1d8-4184-9c35-21d292170131)
+✓ Alice authenticated
+✓ Bob authenticated
+✓ Alice sent message to Bob (ID: msg_95855c6e393e...)
+✓ Bob replied to Alice (ID: msg_60a24b54c2c5...)
+✓ Retrieved 2 messages
+✓ File uploaded successfully
+✓ System health: UP
+
+✅ All tests completed successfully!
+```
+
+**Manual testing:** See the [Complete Usage Guide](#-complete-usage-guide-with-examples) section below for step-by-step tutorials with fictional data.
+
 ### 🎯 Learning Objectives
 
 1. ✅ Understand **Kafka partitioning** and how it preserves message ordering
@@ -205,6 +250,22 @@ curl http://localhost:8082/health
 - Grafana: `http://localhost:3000` (dashboards, admin/admin)
 
 ### 3. Test the System
+
+**Option A: Automated Test Suite (Recommended)**
+
+```bash
+# Complete automated test - tests all features in one command
+./complete_test.sh
+
+# What it tests:
+# - User registration and authentication
+# - Message sending and retrieval
+# - File upload and sharing
+# - System health check
+# See "Quick Automated Test" section for details
+```
+
+**Option B: Manual Testing with cURL**
 
 ```bash
 # IMPORTANT: API Service is mapped to port 8082 externally
@@ -559,6 +620,14 @@ asyncio.run(listen_notifications(your_token))
 ```
 
 ### Testing WebSocket Notifications
+
+**Quick automated test of entire system:**
+```bash
+# Complete test suite (registration, auth, messages, files, WebSocket)
+./complete_test.sh
+
+# See "Quick Automated Test" section above for details
+```
 
 **Automated end-to-end test:**
 ```bash
