@@ -8,11 +8,14 @@ import chat4all.api.handler.FileDownloadHandler;
 import chat4all.api.handler.FileUploadHandler;
 import chat4all.api.http.AuthHandler;
 import chat4all.api.http.ConversationsHandler;
+import chat4all.api.http.GroupConversationHandler;
 import chat4all.api.http.HealthCheckHandler;
 import chat4all.api.http.MessagesHandler;
 import chat4all.api.http.MessageStatusHandler;
 import chat4all.api.http.MetricsHandler;
 import chat4all.api.http.MetricsInterceptor;
+import chat4all.api.http.UserIdentityHandler;
+import chat4all.api.http.UserRegistrationHandler;
 import chat4all.api.kafka.MessageProducer;
 import chat4all.api.messages.MessageValidator;
 import chat4all.api.repository.FileRepository;
@@ -100,7 +103,10 @@ public class Main {
         FileRepository fileRepository = new FileRepository(cassandraConnection.getSession());
         
         // 3. Create HTTP handlers
-        AuthHandler authHandler = new AuthHandler(tokenGenerator);
+        AuthHandler authHandler = new AuthHandler(tokenGenerator, cassandraConnection.getSession());
+        UserRegistrationHandler userRegistrationHandler = new UserRegistrationHandler(cassandraConnection.getSession());
+        UserIdentityHandler userIdentityHandler = new UserIdentityHandler(cassandraConnection.getSession(), jwtAuthenticator);
+        GroupConversationHandler groupHandler = new GroupConversationHandler(cassandraConnection.getSession(), jwtAuthenticator);
         MessagesHandler messagesHandler = new MessagesHandler(messageValidator, messageProducer, jwtAuthenticator, fileRepository);
         MessageStatusHandler messageStatusHandler = new MessageStatusHandler(messageRepository, jwtAuthenticator);
         ConversationsHandler conversationsHandler = new ConversationsHandler(messageRepository, jwtAuthenticator, fileRepository);
@@ -113,7 +119,10 @@ public class Main {
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
         
         // Register routes (wrapped with MetricsInterceptor for automatic metrics)
+        server.createContext("/auth/register", new MetricsInterceptor(userRegistrationHandler));
         server.createContext("/auth/token", new MetricsInterceptor(authHandler));
+        server.createContext("/v1/users/identities", new MetricsInterceptor(userIdentityHandler));
+        server.createContext("/v1/groups", new MetricsInterceptor(groupHandler));
         server.createContext("/v1/messages", new MetricsInterceptor(messagesHandler));
         server.createContext("/v1/conversations/", new MetricsInterceptor(conversationsHandler)); // Note: trailing slash for path matching
         server.createContext("/v1/files", new MetricsInterceptor(fileUploadHandler));

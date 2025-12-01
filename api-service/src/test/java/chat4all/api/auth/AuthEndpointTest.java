@@ -1,6 +1,10 @@
 package chat4all.api.auth;
 
 import chat4all.api.http.AuthHandler;
+import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.cql.PreparedStatement;
+import com.datastax.oss.driver.api.core.cql.ResultSet;
+import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.sun.net.httpserver.HttpExchange;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,7 +44,20 @@ public class AuthEndpointTest {
     @BeforeEach
     public void setUp() {
         TokenGenerator tokenGenerator = new TokenGenerator(TEST_SECRET);
-        authHandler = new AuthHandler(tokenGenerator);
+        
+        // Mock CqlSession for testing (AuthHandler will use fallback hardcoded users when DB query fails)
+        CqlSession mockSession = Mockito.mock(CqlSession.class);
+        PreparedStatement mockPreparedStatement = Mockito.mock(PreparedStatement.class);
+        BoundStatement mockBoundStatement = Mockito.mock(BoundStatement.class);
+        ResultSet mockResultSet = Mockito.mock(ResultSet.class);
+        
+        // Setup mock to return empty results (so AuthHandler uses fallback hardcoded users)
+        Mockito.when(mockSession.prepare(Mockito.anyString())).thenReturn(mockPreparedStatement);
+        Mockito.when(mockPreparedStatement.bind(Mockito.any())).thenReturn(mockBoundStatement);
+        Mockito.when(mockSession.execute(Mockito.any(BoundStatement.class))).thenReturn(mockResultSet);
+        Mockito.when(mockResultSet.one()).thenReturn(null); // No user found in DB, use fallback
+        
+        authHandler = new AuthHandler(tokenGenerator, mockSession);
     }
     
     /**

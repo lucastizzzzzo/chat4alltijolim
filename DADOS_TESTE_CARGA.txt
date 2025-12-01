@@ -1,0 +1,436 @@
+════════════════════════════════════════════════════════════════════════
+  📋 DADOS DE TESTE - CARGA DO SISTEMA CHAT4ALL
+════════════════════════════════════════════════════════════════════════
+
+Data de criação: 30 de Novembro de 2025
+Propósito: Testes de carga, validação de funcionalidades, demos
+
+════════════════════════════════════════════════════════════════════════
+👥 USUÁRIOS DE TESTE (20 usuários)
+════════════════════════════════════════════════════════════════════════
+
+FORMATO: username | password | email | whatsapp | instagram
+
+1.  alice_santos    | alice123  | alice.santos@empresa.com     | +5511987654321 | @alice_santos
+2.  bruno_silva     | bruno123  | bruno.silva@empresa.com      | +5511987654322 | @bruno_dev
+3.  carla_oliveira  | carla123  | carla.oliveira@empresa.com   | +5511987654323 | @carla_design
+4.  daniel_costa    | daniel123 | daniel.costa@empresa.com     | +5511987654324 | @daniel_pm
+5.  eduarda_lima    | eduarda123| eduarda.lima@empresa.com     | +5511987654325 | @eduarda_tech
+6.  felipe_alves    | felipe123 | felipe.alves@empresa.com     | +5511987654326 | @felipe_backend
+7.  gabriela_rocha  | gabi123   | gabriela.rocha@empresa.com   | +5511987654327 | @gabi_frontend
+8.  henrique_dias   | henrique123| henrique.dias@empresa.com   | +5511987654328 | @henrique_data
+9.  isabela_martins | isabela123| isabela.martins@empresa.com  | +5511987654329 | @isabela_qa
+10. joao_ferreira   | joao123   | joao.ferreira@empresa.com    | +5511987654330 | @joao_devops
+11. karen_santos    | karen123  | karen.santos@empresa.com     | +5511987654331 | @karen_ux
+12. leonardo_souza  | leo123    | leonardo.souza@empresa.com   | +5511987654332 | @leo_mobile
+13. mariana_gomes   | mari123   | mariana.gomes@empresa.com    | +5511987654333 | @mari_scrum
+14. nicolas_ribeiro | nicolas123| nicolas.ribeiro@empresa.com  | +5511987654334 | @nicolas_cloud
+15. olivia_carvalho | olivia123 | olivia.carvalho@empresa.com  | +5511987654335 | @olivia_security
+16. pedro_azevedo   | pedro123  | pedro.azevedo@empresa.com    | +5511987654336 | @pedro_ai
+17. quinn_fernandes | quinn123  | quinn.fernandes@empresa.com  | +5511987654337 | @quinn_ml
+18. rafaela_barros  | rafa123   | rafaela.barros@empresa.com   | +5511987654338 | @rafa_analytics
+19. samuel_teixeira | samuel123 | samuel.teixeira@empresa.com  | +5511987654339 | @samuel_crypto
+20. tatiana_moreira | tati123   | tatiana.moreira@empresa.com  | +5511987654340 | @tati_blockchain
+
+════════════════════════════════════════════════════════════════════════
+📱 NÚMEROS DE TELEFONE WHATSAPP (30 contatos externos)
+════════════════════════════════════════════════════════════════════════
+
+CLIENTES:
+1.  +5511999001001 - Cliente VIP - João da Silva
+2.  +5511999001002 - Cliente Premium - Maria Oliveira
+3.  +5511999001003 - Cliente Gold - Carlos Santos
+4.  +5511999001004 - Cliente Platinum - Ana Costa
+5.  +5511999001005 - Cliente Diamond - Pedro Alves
+
+FORNECEDORES:
+6.  +5511999002001 - Fornecedor TI - Tech Solutions LTDA
+7.  +5511999002002 - Fornecedor Cloud - AWS Partner
+8.  +5511999002003 - Fornecedor Hardware - Dell Distribuidor
+9.  +5511999002004 - Fornecedor Software - Microsoft Partner
+10. +5511999002005 - Fornecedor Telecom - Vivo Empresas
+
+PARCEIROS:
+11. +5511999003001 - Parceiro Comercial - ABC Corp
+12. +5511999003002 - Parceiro Estratégico - XYZ Inc
+13. +5511999003003 - Parceiro Distribuição - 123 LTDA
+14. +5511999003004 - Parceiro Logística - Fast Delivery
+15. +5511999003005 - Parceiro Financeiro - FinTech Plus
+
+SUPORTE:
+16. +5511999004001 - Suporte Nível 1
+17. +5511999004002 - Suporte Nível 2
+18. +5511999004003 - Suporte Nível 3
+19. +5511999004004 - Suporte Gerente
+20. +5511999004005 - Suporte Diretor
+
+VENDAS:
+21. +5511999005001 - Vendas Regional São Paulo
+22. +5511999005002 - Vendas Regional Rio de Janeiro
+23. +5511999005003 - Vendas Regional Minas Gerais
+24. +5511999005004 - Vendas Regional Sul
+25. +5511999005005 - Vendas Regional Nordeste
+
+GESTÃO:
+26. +5511999006001 - CEO - Executivo Principal
+27. +5511999006002 - CTO - Diretor Tecnologia
+28. +5511999006003 - CFO - Diretor Financeiro
+29. +5511999006004 - COO - Diretor Operações
+30. +5511999006005 - CMO - Diretor Marketing
+
+════════════════════════════════════════════════════════════════════════
+📷 CONTAS INSTAGRAM (25 handles)
+════════════════════════════════════════════════════════════════════════
+
+INFLUENCIADORES:
+1.  @tech_influencer_br    - Influenciador Tech Brasil
+2.  @dev_lifestyle         - Lifestyle de Desenvolvedor
+3.  @code_inspiration      - Inspiração para Codar
+4.  @startup_stories_br    - Histórias de Startups
+5.  @entrepreneur_daily    - Empreendedor Diário
+
+EMPRESAS:
+6.  @empresa_tech_oficial  - Empresa Tech Oficial
+7.  @startup_unicornio     - Startup Unicórnio BR
+8.  @agencia_digital_sp    - Agência Digital SP
+9.  @consultoria_ti        - Consultoria TI Empresarial
+10. @dev_bootcamp_br       - Dev Bootcamp Brasil
+
+COMUNIDADES:
+11. @comunidade_devs_br    - Comunidade Devs Brasil
+12. @grupo_python_sp       - Grupo Python SP
+13. @javascript_brasil     - JavaScript Brasil
+14. @women_in_tech_br      - Mulheres na Tecnologia BR
+15. @devs_iniciantes       - Devs Iniciantes
+
+MÍDIA/NOTÍCIAS:
+16. @tech_news_br          - Tech News Brasil
+17. @portal_tecnologia     - Portal Tecnologia
+18. @blog_programacao      - Blog Programação
+19. @podcast_tech_br       - Podcast Tech Brasil
+20. @canal_dev_youtube     - Canal Dev YouTube
+
+EVENTOS:
+21. @conference_tech_br    - Conference Tech Brasil
+22. @meetup_devs_sp        - Meetup Devs SP
+23. @hackathon_brasil      - Hackathon Brasil
+24. @workshop_coding       - Workshop Coding
+25. @summit_inovacao       - Summit Inovação
+
+════════════════════════════════════════════════════════════════════════
+👥 GRUPOS DE CONVERSA (15 grupos)
+════════════════════════════════════════════════════════════════════════
+
+FORMATO: Nome do Grupo | Descrição | Membros (usernames)
+
+GRUPOS DE EQUIPE:
+─────────────────
+1. Equipe Backend
+   Descrição: Desenvolvedores backend e arquitetura
+   Membros: felipe_alves, daniel_costa, nicolas_ribeiro, joao_ferreira
+   Admin: felipe_alves
+
+2. Equipe Frontend
+   Descrição: Desenvolvedores frontend e UX
+   Membros: gabriela_rocha, karen_santos, alice_santos, mariana_gomes
+   Admin: gabriela_rocha
+
+3. Equipe DevOps
+   Descrição: Infraestrutura, CI/CD e monitoramento
+   Membros: joao_ferreira, nicolas_ribeiro, felipe_alves
+   Admin: joao_ferreira
+
+4. Equipe QA
+   Descrição: Quality Assurance e testes
+   Membros: isabela_martins, carla_oliveira, mariana_gomes
+   Admin: isabela_martins
+
+5. Equipe Mobile
+   Descrição: Desenvolvimento mobile iOS e Android
+   Membros: leonardo_souza, gabriela_rocha, alice_santos
+   Admin: leonardo_souza
+
+GRUPOS DE PROJETO:
+───────────────────
+6. Projeto Chat4All
+   Descrição: Desenvolvimento do sistema de mensagens distribuído
+   Membros: felipe_alves, gabriela_rocha, joao_ferreira, isabela_martins, daniel_costa
+   Admin: daniel_costa
+
+7. Projeto E-commerce
+   Descrição: Plataforma de e-commerce enterprise
+   Membros: bruno_silva, carla_oliveira, leonardo_souza, henrique_dias
+   Admin: bruno_silva
+
+8. Projeto Analytics
+   Descrição: Dashboard de analytics e BI
+   Membros: henrique_dias, rafaela_barros, pedro_azevedo
+   Admin: henrique_dias
+
+9. Projeto AI/ML
+   Descrição: Modelos de machine learning e IA
+   Membros: pedro_azevedo, quinn_fernandes, nicolas_ribeiro
+   Admin: pedro_azevedo
+
+10. Projeto Blockchain
+    Descrição: Soluções blockchain e smart contracts
+    Membros: samuel_teixeira, tatiana_moreira, olivia_carvalho
+    Admin: samuel_teixeira
+
+GRUPOS GERAIS:
+───────────────
+11. Todos da Empresa
+    Descrição: Comunicados gerais para toda empresa
+    Membros: [TODOS OS 20 USUÁRIOS]
+    Admin: daniel_costa
+
+12. Tech Talks
+    Descrição: Discussões técnicas e compartilhamento de conhecimento
+    Membros: felipe_alves, gabriela_rocha, henrique_dias, pedro_azevedo, nicolas_ribeiro, 
+             leonardo_souza, joao_ferreira, quinn_fernandes
+    Admin: pedro_azevedo
+
+13. Gestão e Liderança
+    Descrição: Grupo de gestores e líderes técnicos
+    Membros: daniel_costa, felipe_alves, mariana_gomes, henrique_dias, isabela_martins
+    Admin: daniel_costa
+
+14. Suporte Clientes VIP
+    Descrição: Atendimento prioritário para clientes VIP
+    Membros: alice_santos, bruno_silva, carla_oliveira, eduarda_lima
+    Admin: alice_santos
+
+15. Inovação e R&D
+    Descrição: Pesquisa e desenvolvimento de novas tecnologias
+    Membros: pedro_azevedo, quinn_fernandes, samuel_teixeira, tatiana_moreira, 
+             olivia_carvalho, nicolas_ribeiro
+    Admin: pedro_azevedo
+
+════════════════════════════════════════════════════════════════════════
+💬 MENSAGENS DE TESTE (20 exemplos)
+════════════════════════════════════════════════════════════════════════
+
+MENSAGENS DE TRABALHO:
+1. "Bom dia equipe! Vamos sincronizar o stand-up às 10h?"
+2. "Pessoal, o deploy da versão 2.1.0 está agendado para hoje às 18h"
+3. "Alguém pode revisar o PR #342? Preciso mergar hoje"
+4. "Reunião de retrospectiva movida para quarta-feira às 15h"
+5. "Código review aprovado! Pode mergar na main 🚀"
+
+MENSAGENS DE SUPORTE:
+6. "Cliente reportou erro 500 no checkout. Investigando..."
+7. "Bug crítico resolvido! Patch deployado em produção"
+8. "Ticket #8472 resolvido. Cliente já foi notificado"
+9. "SLA de 99.9% mantido este mês! 🎉"
+10. "Escalando para nível 3: problema de performance no banco"
+
+MENSAGENS TÉCNICAS:
+11. "Redis cluster reiniciado. Latência voltou ao normal"
+12. "Kafka lag zerado! Consumer groups balanceados ✅"
+13. "Métricas do Prometheus mostram pico às 14h - investigar"
+14. "CI/CD pipeline verde! Build #1234 passou em todos os testes"
+15. "Migração do banco finalizada com sucesso. Zero downtime!"
+
+MENSAGENS INFORMAIS:
+16. "Alguém quer café? Vou até a copa ☕"
+17. "Happy hour sexta-feira 18h! Quem vai? 🍺"
+18. "Parabéns João pelo aniversário! 🎂🎉"
+19. "Alguém viu meu fone de ouvido? Deixei na sala 301"
+20. "Fim de sprint! Pizza na sexta pra comemorar? 🍕"
+
+════════════════════════════════════════════════════════════════════════
+📊 CENÁRIOS DE TESTE SUGERIDOS
+════════════════════════════════════════════════════════════════════════
+
+TESTE 1: Registro em Massa
+───────────────────────────
+Objetivo: Registrar 20 usuários rapidamente
+Métrica: Tempo total, taxa de sucesso
+Esperado: <30s, 100% sucesso
+
+TESTE 2: Mensagens 1-para-1
+────────────────────────────
+Objetivo: Enviar 100 mensagens entre pares de usuários
+Métrica: Latência, throughput
+Esperado: <100ms latência, >50 msg/s
+
+TESTE 3: Mensagens em Grupo
+─────────────────────────────
+Objetivo: Enviar 50 mensagens no grupo "Todos da Empresa" (20 membros)
+Métrica: Fanout, delivery time
+Esperado: Todas entregues em <5s
+
+TESTE 4: Upload de Arquivos
+─────────────────────────────
+Objetivo: 10 usuários fazem upload de arquivos 1MB simultaneamente
+Métrica: Throughput, taxa de erro
+Esperado: 10MB/s agregado, 0% erro
+
+TESTE 5: Autenticação Concorrente
+───────────────────────────────────
+Objetivo: 20 usuários fazem login simultâneo
+Métrica: Tempo de resposta, tokens gerados
+Esperado: <200ms por login, 100% sucesso
+
+TESTE 6: Notificações em Tempo Real
+─────────────────────────────────────
+Objetivo: Verificar notificações push para 10 usuários ativos
+Métrica: Latência de entrega
+Esperado: <3s após envio
+
+TESTE 7: Criação de Grupos
+────────────────────────────
+Objetivo: Criar 15 grupos com diferentes tamanhos
+Métrica: Tempo de criação, persistência
+Esperado: <500ms por grupo, 100% persistidos
+
+TESTE 8: Consulta de Histórico
+────────────────────────────────
+Objetivo: 10 usuários consultam histórico de 100 mensagens simultaneamente
+Métrica: Latência de query, cache hit rate
+Esperado: <200ms, >80% cache hit
+
+TESTE 9: Failover de Worker
+─────────────────────────────
+Objetivo: Derrubar 1 worker durante carga de 50 msg/s
+Métrica: Downtime, perda de mensagens
+Esperado: <10s downtime, 0 mensagens perdidas
+
+TESTE 10: Escalabilidade Horizontal
+─────────────────────────────────────
+Objetivo: Escalar de 1 para 3 workers durante carga
+Métrica: Rebalancing time, throughput
+Esperado: <30s rebalancing, throughput aumenta 3x
+
+════════════════════════════════════════════════════════════════════════
+🔧 COMANDOS ÚTEIS PARA CARGA
+════════════════════════════════════════════════════════════════════════
+
+REGISTRAR USUÁRIO VIA CURL:
+curl -X POST http://localhost:8080/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "alice_santos",
+    "password": "alice123",
+    "email": "alice.santos@empresa.com"
+  }'
+
+FAZER LOGIN:
+curl -X POST http://localhost:8080/auth/token \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "alice_santos",
+    "password": "alice123"
+  }'
+
+VINCULAR WHATSAPP:
+curl -X POST http://localhost:8080/v1/users/identities \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "platform": "whatsapp",
+    "value": "+5511987654321"
+  }'
+
+VINCULAR INSTAGRAM:
+curl -X POST http://localhost:8080/v1/users/identities \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "platform": "instagram",
+    "value": "@alice_santos"
+  }'
+
+CRIAR GRUPO:
+curl -X POST http://localhost:8080/v1/groups \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Equipe Backend",
+    "description": "Desenvolvedores backend e arquitetura",
+    "initial_members": ["user_id_1", "user_id_2", "user_id_3"]
+  }'
+
+ENVIAR MENSAGEM:
+curl -X POST http://localhost:8080/v1/messages \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "conversation_id": "conv_id",
+    "recipient_id": "whatsapp:+5511987654321",
+    "content": "Mensagem de teste para carga"
+  }'
+
+LISTAR MENSAGENS:
+curl -X GET "http://localhost:8080/v1/conversations/{conv_id}/messages?limit=50" \
+  -H "Authorization: Bearer $TOKEN"
+
+════════════════════════════════════════════════════════════════════════
+📈 MÉTRICAS A MONITORAR DURANTE CARGA
+════════════════════════════════════════════════════════════════════════
+
+PROMETHEUS QUERIES:
+───────────────────
+1. Taxa de mensagens aceitas:
+   rate(messages_accepted_total[1m])
+
+2. Latência P95 da API:
+   histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[1m]))
+
+3. Consumer lag do Kafka:
+   kafka_consumer_lag
+
+4. Erros HTTP 5xx:
+   rate(http_requests_total{status=~"5.."}[1m])
+
+5. Uso de CPU:
+   rate(process_cpu_seconds_total[1m])
+
+6. Uso de memória:
+   process_resident_memory_bytes
+
+7. Throughput de mensagens:
+   sum(rate(messages_processed_total[1m]))
+
+8. Taxa de erro de conectores:
+   rate(connector_errors_total[1m])
+
+CASSANDRA QUERIES:
+──────────────────
+1. SELECT COUNT(*) FROM chat4all.users;
+2. SELECT COUNT(*) FROM chat4all.messages;
+3. SELECT COUNT(*) FROM chat4all.group_conversations;
+4. SELECT status, COUNT(*) FROM chat4all.messages GROUP BY status ALLOW FILTERING;
+
+════════════════════════════════════════════════════════════════════════
+✅ VALIDAÇÕES PÓS-CARGA
+════════════════════════════════════════════════════════════════════════
+
+1. [ ] Todos os usuários foram criados no Cassandra
+2. [ ] Todas as identidades foram vinculadas corretamente
+3. [ ] Todos os grupos foram criados com membros corretos
+4. [ ] Mensagens foram entregues (status=DELIVERED)
+5. [ ] Nenhum erro 5xx na API
+6. [ ] Consumer lag do Kafka = 0
+7. [ ] Dashboards Grafana mostram métricas corretas
+8. [ ] Logs não contêm exceções críticas
+9. [ ] MinIO contém arquivos uploadados
+10. [ ] Notificações foram entregues em tempo real
+
+════════════════════════════════════════════════════════════════════════
+📝 NOTAS FINAIS
+════════════════════════════════════════════════════════════════════════
+
+• Todos os dados são fictícios para teste
+• Senhas são simples propositalmente (ambiente de teste)
+• Telefones seguem padrão brasileiro (+55 11 9XXXX-XXXX)
+• Instagram handles são únicos e fictícios
+• Grupos refletem estrutura organizacional típica
+• Use estes dados para validar escalabilidade e resiliência
+
+════════════════════════════════════════════════════════════════════════
+Data de criação: 30/11/2025
+Última atualização: 30/11/2025
+Versão: 1.0
+Autor: GitHub Copilot para Chat4All Team
+════════════════════════════════════════════════════════════════════════

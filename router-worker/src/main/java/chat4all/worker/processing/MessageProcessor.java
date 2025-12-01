@@ -5,6 +5,7 @@ import chat4all.worker.cassandra.CassandraMessageStore;
 import chat4all.worker.cassandra.MessageEntity;
 import chat4all.worker.metrics.WorkerMetricsRegistry;
 import chat4all.worker.routing.ConnectorRouter;
+import chat4all.worker.notifications.RedisNotificationPublisher;
 
 import java.time.Instant;
 
@@ -51,17 +52,24 @@ public class MessageProcessor {
     private final CassandraMessageStore messageStore;
     private final ConnectorRouter connectorRouter;
     private final WorkerMetricsRegistry metricsRegistry;
+    private final RedisNotificationPublisher notificationPublisher;
     
     /**
      * Cria MessageProcessor
      * 
      * @param messageStore Store para persistir mensagens
      * @param connectorRouter Router para conectores externos (WhatsApp, Instagram, etc.)
+     * @param notificationPublisher Publisher para notificações via Redis (opcional)
      */
-    public MessageProcessor(CassandraMessageStore messageStore, ConnectorRouter connectorRouter) {
+    public MessageProcessor(
+        CassandraMessageStore messageStore, 
+        ConnectorRouter connectorRouter,
+        RedisNotificationPublisher notificationPublisher
+    ) {
         this.messageStore = messageStore;
         this.connectorRouter = connectorRouter;
         this.metricsRegistry = WorkerMetricsRegistry.getInstance();
+        this.notificationPublisher = notificationPublisher;
     }
     
     /**
@@ -192,6 +200,19 @@ public class MessageProcessor {
                 // Não falhar todo o processamento por isso (eventual consistency)
             } else {
                 System.out.println("✓ Status updated to DELIVERED");
+            }
+            
+            // [6] PUBLISH NOTIFICATION - Notificar via Redis para WebSocket Gateway
+            if (notificationPublisher != null && recipientId != null && !recipientId.isEmpty()) {
+                notificationPublisher.publishNewMessageNotification(
+                    recipientId,
+                    messageId,
+                    event.getSenderId(),
+                    conversationId,
+                    event.getContent(),
+                    event.getFileId()
+                );
+                System.out.println("✓ Notification published to Redis for user: " + recipientId);
             }
             
             System.out.println("✓ Processing complete for message: " + messageId);

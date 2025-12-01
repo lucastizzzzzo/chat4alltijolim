@@ -122,9 +122,11 @@ CREATE TABLE IF NOT EXISTS users (
     -- Username for login
     username TEXT,
     
-    -- Password hash (bcrypt or similar)
-    -- Phase 1: hardcoded in code, not used from DB
-    password_hash TEXT,
+    -- Email address
+    email TEXT,
+    
+    -- Password (plain text for educational purposes - use bcrypt in production)
+    password TEXT,
     
     -- Account creation timestamp
     created_at TIMESTAMP
@@ -133,6 +135,79 @@ WITH comment = 'Users table - simplified for educational Phase 1';
 
 -- Optional: Add index on username for login queries
 CREATE INDEX IF NOT EXISTS users_by_username ON users (username);
+
+-- Optional: Add index on email for uniqueness check
+CREATE INDEX IF NOT EXISTS users_by_email ON users (email);
+
+-- ============================================================================
+-- USER_IDENTITIES TABLE
+-- ============================================================================
+-- Purpose: Link users to their WhatsApp/Instagram accounts
+-- Partition key: user_id - groups all identities of a user
+-- Clustering key: platform - allows multiple identities per platform
+--
+-- Educational notes:
+-- - Enables queries: "Get all WhatsApp numbers for user X"
+-- - Enables reverse lookup: "Find user by WhatsApp number"
+-- - Supports multiple accounts per platform (e.g., 2 WhatsApp numbers)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS user_identities (
+    -- Partition key: user who owns this identity
+    user_id TEXT,
+    
+    -- Clustering key: platform type
+    platform TEXT,  -- 'whatsapp' or 'instagram'
+    
+    -- Identity value (phone number or Instagram handle)
+    identity_value TEXT,  -- e.g., '+5562996991812' or '@username'
+    
+    -- Verification status
+    verified BOOLEAN,
+    
+    -- Timestamps
+    linked_at TIMESTAMP,
+    verified_at TIMESTAMP,
+    
+    PRIMARY KEY (user_id, platform, identity_value)
+)
+WITH comment = 'User identity mappings for WhatsApp and Instagram';
+
+-- Reverse lookup index: find user by identity
+CREATE INDEX IF NOT EXISTS identities_by_value ON user_identities (identity_value);
+
+-- ============================================================================
+-- GROUP_CONVERSATIONS TABLE
+-- ============================================================================
+-- Purpose: Store group metadata and members
+-- Partition key: group_id
+--
+-- Educational notes:
+-- - Extends conversations to support N participants (not just 1:1)
+-- - Denormalized member list for query efficiency
+-- - Admin list for permission management
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS group_conversations (
+    -- Partition key: unique group identifier
+    group_id TEXT PRIMARY KEY,
+    
+    -- Group name and description
+    name TEXT,
+    description TEXT,
+    
+    -- Group members (denormalized list)
+    member_ids LIST<TEXT>,
+    
+    -- Group admins (subset of members)
+    admin_ids LIST<TEXT>,
+    
+    -- Group settings
+    max_members INT,  -- e.g., 256
+    
+    -- Timestamps
+    created_at TIMESTAMP,
+    created_by TEXT  -- user_id of creator
+)
+WITH comment = 'Group conversation metadata';
 
 -- ============================================================================
 -- FILES TABLE (Phase 2: Object Storage)
