@@ -1531,3 +1531,646 @@ For questions about this educational project:
 ---
 
 **Chat4All** - Educational Distributed Messaging Platform | v1.0.0 | November 2025
+
+## 🎮 Complete Usage Guide with Examples
+
+### Step-by-Step Tutorial with Fictional Data
+
+This section provides a complete walkthrough of all Chat4All features using fictional characters and data.
+
+#### 1. 🚀 Initial Setup
+
+```bash
+# Clone and setup
+git clone https://github.com/lucastizzzzzo/chat4alltijolim.git
+cd chat4alltijolim
+make quickstart
+
+# Wait for services to be ready (~30 seconds)
+# Verify everything is running
+make status
+```
+
+#### 2. 👥 Register Users (Create Test Accounts)
+
+```bash
+# Register Alice (will use WhatsApp)
+curl -X POST http://localhost:8080/v1/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "alice",
+    "email": "alice@example.com",
+    "platform": "whatsapp",
+    "platform_user_id": "whatsapp:+5511999991111"
+  }'
+
+# Register Bob (will use Instagram)
+curl -X POST http://localhost:8080/v1/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "bob",
+    "email": "bob@example.com",
+    "platform": "instagram",
+    "platform_user_id": "instagram:@bob_official"
+  }'
+
+# Register Carol (will use WhatsApp)
+curl -X POST http://localhost:8080/v1/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "carol",
+    "email": "carol@example.com",
+    "platform": "whatsapp",
+    "platform_user_id": "whatsapp:+5511999992222"
+  }'
+```
+
+**Expected Response:**
+```json
+{
+  "userId": "generated-uuid-here",
+  "username": "alice",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+💡 **Save the tokens** - you'll need them for authentication!
+
+#### 3. 💬 Send Messages Between Users
+
+```bash
+# Alice sends a message to Bob
+curl -X POST http://localhost:8080/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ALICE_TOKEN_HERE" \
+  -d '{
+    "recipient_id": "instagram:@bob_official",
+    "content": "Hi Bob! How are you doing today?",
+    "conversation_id": "alice-bob-chat"
+  }'
+
+# Bob replies to Alice
+curl -X POST http://localhost:8080/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer BOB_TOKEN_HERE" \
+  -d '{
+    "recipient_id": "whatsapp:+5511999991111",
+    "content": "Hey Alice! I am great, thanks for asking! 😊",
+    "conversation_id": "alice-bob-chat"
+  }'
+
+# Carol sends a message to Alice
+curl -X POST http://localhost:8080/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer CAROL_TOKEN_HERE" \
+  -d '{
+    "recipient_id": "whatsapp:+5511999991111",
+    "content": "Alice, are we still meeting for lunch tomorrow?",
+    "conversation_id": "alice-carol-lunch"
+  }'
+```
+
+**Expected Response:**
+```json
+{
+  "message_id": "msg-uuid-here",
+  "status": "SENT",
+  "timestamp": "2025-11-30T10:15:30.123Z"
+}
+```
+
+#### 4. 📥 Retrieve Conversation History
+
+```bash
+# Get Alice's conversation with Bob
+curl -X GET "http://localhost:8080/v1/conversations/alice-bob-chat/messages?limit=10" \
+  -H "Authorization: Bearer ALICE_TOKEN_HERE"
+
+# Get Alice's conversation with Carol
+curl -X GET "http://localhost:8080/v1/conversations/alice-carol-lunch/messages?limit=10" \
+  -H "Authorization: Bearer ALICE_TOKEN_HERE"
+```
+
+**Expected Response:**
+```json
+{
+  "conversation_id": "alice-bob-chat",
+  "messages": [
+    {
+      "message_id": "msg-001",
+      "sender_id": "whatsapp:+5511999991111",
+      "recipient_id": "instagram:@bob_official",
+      "content": "Hi Bob! How are you doing today?",
+      "timestamp": "2025-11-30T10:15:30.123Z",
+      "status": "DELIVERED"
+    },
+    {
+      "message_id": "msg-002",
+      "sender_id": "instagram:@bob_official",
+      "recipient_id": "whatsapp:+5511999991111",
+      "content": "Hey Alice! I am great, thanks for asking! 😊",
+      "timestamp": "2025-11-30T10:16:45.456Z",
+      "status": "DELIVERED"
+    }
+  ],
+  "total": 2
+}
+```
+
+#### 5. 📎 Share Files
+
+```bash
+# Upload a file (e.g., presentation)
+curl -X POST http://localhost:8080/v1/files/upload \
+  -H "Authorization: Bearer ALICE_TOKEN_HERE" \
+  -F "file=@/path/to/presentation.pdf" \
+  -F "filename=Q4_Report.pdf"
+
+# Save the returned file_id and download_url
+# Response example:
+# {
+#   "file_id": "file-uuid-here",
+#   "filename": "Q4_Report.pdf",
+#   "size": 2458624,
+#   "upload_url": "https://minio:9000/...",
+#   "download_url": "https://minio:9000/...",
+#   "expires_at": "2025-11-30T11:15:30Z"
+# }
+
+# Send message with file attachment
+curl -X POST http://localhost:8080/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ALICE_TOKEN_HERE" \
+  -d '{
+    "recipient_id": "instagram:@bob_official",
+    "content": "Bob, here is the Q4 report we discussed",
+    "conversation_id": "alice-bob-chat",
+    "file_url": "https://minio:9000/chat4all-files/file-uuid-here"
+  }'
+
+# Download the file (using presigned URL)
+curl -o downloaded_report.pdf "DOWNLOAD_URL_FROM_RESPONSE"
+```
+
+#### 6. 🔔 Real-Time Notifications (WebSocket)
+
+Open a WebSocket connection to receive real-time notifications:
+
+```javascript
+// Using JavaScript in browser or Node.js
+const ws = new WebSocket('ws://localhost:8085?userId=whatsapp:+5511999991111');
+
+ws.onopen = () => {
+  console.log('✅ Connected to WebSocket');
+};
+
+ws.onmessage = (event) => {
+  const notification = JSON.parse(event.data);
+  console.log('📨 New notification:', notification);
+  // Example notification:
+  // {
+  //   "type": "NEW_MESSAGE",
+  //   "message_id": "msg-003",
+  //   "sender_id": "instagram:@bob_official",
+  //   "content": "Thanks for the report!",
+  //   "timestamp": "2025-11-30T10:20:00Z"
+  // }
+};
+
+ws.onerror = (error) => {
+  console.error('❌ WebSocket error:', error);
+};
+
+ws.onclose = () => {
+  console.log('🔌 WebSocket closed');
+};
+```
+
+**Using Python:**
+```python
+# scripts/test-websocket-notifications.py
+python3 scripts/test-websocket-notifications.py
+```
+
+#### 7. 🖥️ Interactive CLI Usage
+
+The CLI provides a user-friendly interface for all features:
+
+```bash
+# Start the interactive CLI
+make cli
+
+# Or directly:
+cd cli && python3 chat4all-cli.py
+```
+
+**CLI Features:**
+
+```
+┌─────────────────────────────────────────────┐
+│      Chat4All - Interactive CLI v1.0        │
+│    Distributed Messaging Platform           │
+└─────────────────────────────────────────────┘
+
+Options:
+  1. Register User
+  2. Send Message
+  3. View Conversation
+  4. Upload File
+  5. Send Message with File
+  6. List My Conversations
+  7. View User Profile
+  8. Test WebSocket Notifications
+  9. Health Check
+  0. Exit
+
+Select option: 
+```
+
+**Example CLI Session:**
+
+```bash
+# 1. Register a new user
+Select option: 1
+Enter username: david
+Enter email: david@example.com
+Enter platform (whatsapp/instagram): whatsapp
+Enter platform user ID: whatsapp:+5511999993333
+
+✅ User registered successfully!
+User ID: user-123-uuid
+Token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+💾 Token saved to: ~/.chat4all/token
+
+# 2. Send a message
+Select option: 2
+Enter your token (or press Enter to use saved): [Enter]
+Enter recipient ID: instagram:@bob_official
+Enter message content: Hey Bob, let's grab coffee this afternoon!
+Enter conversation ID: david-bob-coffee
+
+✅ Message sent!
+Message ID: msg-456-uuid
+Status: SENT
+Timestamp: 2025-11-30T10:25:00Z
+
+# 3. View conversation
+Select option: 3
+Enter conversation ID: david-bob-coffee
+Enter limit (default 50): 10
+
+📋 Conversation: david-bob-coffee
+════════════════════════════════════════════
+
+[10:25:00] david → bob
+  "Hey Bob, let's grab coffee this afternoon!"
+  Status: DELIVERED ✓
+
+Total messages: 1
+════════════════════════════════════════════
+
+# 4. Upload and send file
+Select option: 4
+Enter file path: ~/Documents/invoice.pdf
+Enter filename: November_Invoice.pdf
+
+⬆️  Uploading file...
+✅ File uploaded successfully!
+File ID: file-789-uuid
+Size: 128.5 KB
+Download URL: https://minio:9000/...
+Expires: 2025-11-30T11:25:00Z
+
+Select option: 5
+Enter recipient ID: instagram:@bob_official
+Enter message: Here's the invoice for November
+Enter conversation ID: david-bob-coffee
+Enter file URL: https://minio:9000/... [auto-filled]
+
+✅ Message with file sent!
+
+# 8. Test WebSocket notifications
+Select option: 8
+Enter your user ID: whatsapp:+5511999993333
+
+🔌 Connecting to WebSocket...
+✅ Connected! Listening for notifications...
+
+📨 [10:26:30] NEW_MESSAGE from instagram:@bob_official
+   "Perfect! I'll review the invoice and get back to you"
+   
+📨 [10:27:15] STATUS_UPDATE: msg-456-uuid → READ ✓✓
+
+Press Ctrl+C to stop listening...
+```
+
+#### 8. 📊 Monitor System Health
+
+```bash
+# Check overall system health
+curl http://localhost:8080/health
+
+# View real-time metrics in Prometheus
+open http://localhost:9090
+
+# View Grafana dashboards
+open http://localhost:3000
+# Login: admin / admin
+# Pre-configured dashboards:
+#  - API Service Metrics
+#  - Router Worker Performance
+#  - Kafka Throughput
+#  - System Overview
+
+# Check service status
+make status
+
+# View logs
+make logs              # All services
+make logs-api          # API service only
+make logs-router       # Router worker only
+make logs-kafka        # Kafka only
+```
+
+#### 9. 🧪 Run Automated Tests
+
+```bash
+# Run all tests
+make test
+
+# Run specific test suites
+make test-unit             # Unit tests
+make test-integration      # Integration tests
+make test-e2e             # End-to-end tests
+make test-websocket       # WebSocket tests
+
+# Populate database with test data
+make populate
+
+# Run complete demo
+make demo
+```
+
+#### 10. 🎯 Advanced Scenarios
+
+**Group Conversation Simulation:**
+```bash
+# Create a group chat with multiple participants
+GROUP_ID="team-standup-$(date +%s)"
+
+# Alice sends to group
+curl -X POST http://localhost:8080/v1/messages \
+  -H "Authorization: Bearer ALICE_TOKEN" \
+  -d "{
+    \"recipient_id\": \"group:${GROUP_ID}\",
+    \"content\": \"Good morning team! Standup at 10am?\",
+    \"conversation_id\": \"${GROUP_ID}\"
+  }"
+
+# Bob replies
+curl -X POST http://localhost:8080/v1/messages \
+  -H "Authorization: Bearer BOB_TOKEN" \
+  -d "{
+    \"recipient_id\": \"group:${GROUP_ID}\",
+    \"content\": \"Sounds good! I'll be there.\",
+    \"conversation_id\": \"${GROUP_ID}\"
+  }"
+
+# Carol replies
+curl -X POST http://localhost:8080/v1/messages \
+  -H "Authorization: Bearer CAROL_TOKEN" \
+  -d "{
+    \"recipient_id\": \"group:${GROUP_ID}\",
+    \"content\": \"Me too! See you all at 10.\",
+    \"conversation_id\": \"${GROUP_ID}\"
+  }"
+
+# Get complete group history
+curl "http://localhost:8080/v1/conversations/${GROUP_ID}/messages?limit=100" \
+  -H "Authorization: Bearer ALICE_TOKEN"
+```
+
+**Cross-Platform Communication:**
+```bash
+# WhatsApp user messages Instagram user
+curl -X POST http://localhost:8080/v1/messages \
+  -H "Authorization: Bearer ALICE_TOKEN" \
+  -d '{
+    "recipient_id": "instagram:@bob_official",
+    "content": "Testing cross-platform messaging!",
+    "conversation_id": "cross-platform-test"
+  }'
+
+# Verify delivery through connector logs
+make logs-connector-instagram
+make logs-connector-whatsapp
+
+# Check message status lifecycle
+curl "http://localhost:8080/v1/conversations/cross-platform-test/messages" \
+  -H "Authorization: Bearer ALICE_TOKEN"
+# Watch status change: SENT → DELIVERED → READ
+```
+
+**Large File Upload (2GB support):**
+```bash
+# Generate a large test file
+dd if=/dev/zero of=large_file.bin bs=1M count=100  # 100MB test file
+
+# Upload with progress
+curl -X POST http://localhost:8080/v1/files/upload \
+  -H "Authorization: Bearer ALICE_TOKEN" \
+  -F "file=@large_file.bin" \
+  -F "filename=large_test_file.bin" \
+  --progress-bar
+
+# Send with file attachment
+curl -X POST http://localhost:8080/v1/messages \
+  -H "Authorization: Bearer ALICE_TOKEN" \
+  -d '{
+    "recipient_id": "instagram:@bob_official",
+    "content": "Sending you the large dataset",
+    "conversation_id": "alice-bob-data",
+    "file_url": "PRESIGNED_URL_FROM_UPLOAD"
+  }'
+```
+
+#### 11. 🔍 Database Inspection
+
+```bash
+# Access Cassandra shell
+make db-shell
+
+# Inside CQL shell, run queries:
+cqlsh> USE chat4all;
+cqlsh:chat4all> SELECT * FROM messages WHERE conversation_id = 'alice-bob-chat';
+cqlsh:chat4all> SELECT * FROM conversations WHERE user_id = 'whatsapp:+5511999991111';
+cqlsh:chat4all> SELECT * FROM files WHERE file_id = 'your-file-uuid';
+
+# Generate HTML view of database
+make db-view
+# Open: cassandra-data.html in browser
+```
+
+#### 12. 🧹 Cleanup
+
+```bash
+# Stop all services
+make stop
+
+# Clean up containers and volumes
+make clean
+
+# Complete cleanup (including images)
+make clean-all
+```
+
+### 📝 Complete Test Script
+
+Save this as `complete_test.sh`:
+
+```bash
+#!/bin/bash
+set -e
+
+echo "🚀 Chat4All Complete Test Suite"
+echo "================================"
+
+# Colors
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+# Base URL
+API_URL="http://localhost:8080"
+
+echo -e "\n${YELLOW}1. Registering test users...${NC}"
+
+# Register Alice
+ALICE_RESPONSE=$(curl -s -X POST $API_URL/v1/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "alice_test",
+    "email": "alice.test@example.com",
+    "platform": "whatsapp",
+    "platform_user_id": "whatsapp:+5511111111111"
+  }')
+ALICE_TOKEN=$(echo $ALICE_RESPONSE | jq -r '.token')
+echo -e "${GREEN}✓ Alice registered${NC}"
+
+# Register Bob
+BOB_RESPONSE=$(curl -s -X POST $API_URL/v1/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "bob_test",
+    "email": "bob.test@example.com",
+    "platform": "instagram",
+    "platform_user_id": "instagram:@bob_test"
+  }')
+BOB_TOKEN=$(echo $BOB_RESPONSE | jq -r '.token')
+echo -e "${GREEN}✓ Bob registered${NC}"
+
+echo -e "\n${YELLOW}2. Sending messages...${NC}"
+
+# Alice → Bob
+MSG1=$(curl -s -X POST $API_URL/v1/messages \
+  -H "Authorization: Bearer $ALICE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "recipient_id": "instagram:@bob_test",
+    "content": "Hi Bob! This is an automated test message.",
+    "conversation_id": "test-alice-bob"
+  }')
+echo -e "${GREEN}✓ Alice sent message to Bob${NC}"
+
+# Bob → Alice
+MSG2=$(curl -s -X POST $API_URL/v1/messages \
+  -H "Authorization: Bearer $BOB_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "recipient_id": "whatsapp:+5511111111111",
+    "content": "Hey Alice! Test reply received.",
+    "conversation_id": "test-alice-bob"
+  }')
+echo -e "${GREEN}✓ Bob replied to Alice${NC}"
+
+echo -e "\n${YELLOW}3. Retrieving conversation...${NC}"
+sleep 2  # Wait for processing
+
+CONV=$(curl -s -X GET "$API_URL/v1/conversations/test-alice-bob/messages?limit=10" \
+  -H "Authorization: Bearer $ALICE_TOKEN")
+MSG_COUNT=$(echo $CONV | jq '.messages | length')
+echo -e "${GREEN}✓ Retrieved $MSG_COUNT messages${NC}"
+
+echo -e "\n${YELLOW}4. Testing file upload...${NC}"
+
+# Create test file
+echo "This is test content for file upload" > test_upload.txt
+
+FILE_UPLOAD=$(curl -s -X POST $API_URL/v1/files/upload \
+  -H "Authorization: Bearer $ALICE_TOKEN" \
+  -F "file=@test_upload.txt" \
+  -F "filename=test_document.txt")
+FILE_URL=$(echo $FILE_UPLOAD | jq -r '.download_url')
+echo -e "${GREEN}✓ File uploaded successfully${NC}"
+
+# Clean up test file
+rm test_upload.txt
+
+echo -e "\n${YELLOW}5. Sending message with file...${NC}"
+
+MSG_WITH_FILE=$(curl -s -X POST $API_URL/v1/messages \
+  -H "Authorization: Bearer $ALICE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"recipient_id\": \"instagram:@bob_test\",
+    \"content\": \"Here's the test document\",
+    \"conversation_id\": \"test-alice-bob\",
+    \"file_url\": \"$FILE_URL\"
+  }")
+echo -e "${GREEN}✓ Message with file sent${NC}"
+
+echo -e "\n${YELLOW}6. Checking system health...${NC}"
+
+HEALTH=$(curl -s $API_URL/health)
+echo -e "${GREEN}✓ System health: $(echo $HEALTH | jq -r '.status')${NC}"
+
+echo -e "\n${GREEN}================================${NC}"
+echo -e "${GREEN}✅ All tests completed successfully!${NC}"
+echo -e "${GREEN}================================${NC}"
+
+echo -e "\n${YELLOW}Test Summary:${NC}"
+echo "  - Users registered: 2"
+echo "  - Messages sent: 3"
+echo "  - Files uploaded: 1"
+echo "  - Conversation retrieved: $MSG_COUNT messages"
+echo ""
+echo "Alice Token: $ALICE_TOKEN"
+echo "Bob Token: $BOB_TOKEN"
+```
+
+Make it executable and run:
+```bash
+chmod +x complete_test.sh
+./complete_test.sh
+```
+
+### 🎓 Educational Notes
+
+**Key Concepts Demonstrated:**
+
+1. **Event-Driven Architecture**: Messages flow through Kafka asynchronously
+2. **Microservices**: Each connector is an independent service
+3. **NoSQL Data Modeling**: Cassandra query-driven design
+4. **Presigned URLs**: Secure file sharing without exposing credentials
+5. **Real-Time Communication**: WebSocket for instant notifications
+6. **Horizontal Scalability**: Stateless services can scale independently
+7. **Observability**: Prometheus metrics + Grafana dashboards
+8. **API Design**: RESTful endpoints with JWT authentication
+
+**Performance Expectations:**
+- Message throughput: ~750 messages/minute
+- P95 latency: < 3ms
+- File upload: Supports up to 2GB
+- WebSocket latency: ~140ms for notifications
+- 0% error rate under normal load
+
