@@ -43,6 +43,21 @@ Chat4All is an **educational implementation** of a distributed messaging platfor
 - **Microservices Pattern**
 - **Asynchronous Processing**
 
+### 🚀 Quick Installation
+
+For quick setup on any machine (educational purposes):
+
+```bash
+# 1. Clone and enter directory
+git clone https://github.com/lucastizzzzzo/chat4alltijolim.git
+cd chat4alltijolim
+
+# 2. One-command setup (checks deps, builds, starts everything)
+make quickstart
+```
+
+See **[INSTALL.md](INSTALL.md)** for detailed installation guide and **[Makefile](Makefile)** for all available commands.
+
 ### 🎯 Learning Objectives
 
 1. ✅ Understand **Kafka partitioning** and how it preserves message ordering
