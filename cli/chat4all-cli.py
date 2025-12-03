@@ -11,6 +11,7 @@ import os
 import time
 import uuid
 import threading
+import base64
 from datetime import datetime
 from typing import Optional, Dict, Any, List, Set
 import websocket  # websocket-client library
@@ -142,7 +143,11 @@ class Chat4AllCLI:
                     token_data = login_response.json()
                     self.token = token_data.get('access_token')
                     self.current_user = username
-                    self.current_user_id = token_data.get('user_id')
+                    
+                    # Decodificar JWT para extrair user_id do campo 'sub'
+                    token_payload = self._decode_jwt(self.token)
+                    if token_payload:
+                        self.current_user_id = token_payload.get("sub")
                     
                     print(f"{Colors.GREEN}✅ Login realizado com sucesso!{Colors.ENDC}")
                     
@@ -294,6 +299,27 @@ class Chat4AllCLI:
         print(f"\n{Colors.YELLOW}💡 Agora você pode enviar mensagens nesta conversa (opção 5){Colors.ENDC}")
         print(f"{Colors.YELLOW}   O ID foi selecionado automaticamente.{Colors.ENDC}")
     
+    def _decode_jwt(self, token: str) -> Optional[Dict]:
+        """Decodifica JWT para extrair o user_id do campo 'sub'"""
+        try:
+            # JWT tem 3 partes separadas por '.': header.payload.signature
+            parts = token.split('.')
+            if len(parts) != 3:
+                return None
+            
+            # Decodificar payload (segunda parte)
+            payload = parts[1]
+            # Adicionar padding se necessário
+            padding = 4 - len(payload) % 4
+            if padding != 4:
+                payload += '=' * padding
+            
+            decoded = base64.urlsafe_b64decode(payload)
+            return json.loads(decoded)
+        except Exception as e:
+            print(f"{Colors.RED}Erro ao decodificar token: {e}{Colors.ENDC}")
+            return None
+    
     def authenticate(self):
         """Autentica usuário e obtém JWT token"""
         print(f"\n{Colors.BOLD}🔐 Autenticação{Colors.ENDC}")
@@ -319,7 +345,12 @@ class Chat4AllCLI:
                 data = response.json()
                 self.token = data.get("access_token")
                 self.current_user = username
-                self.current_user_id = data.get("user_id")  # Armazenar UUID
+                
+                # Decodificar JWT para extrair user_id do campo 'sub'
+                token_payload = self._decode_jwt(self.token)
+                if token_payload:
+                    self.current_user_id = token_payload.get("sub")  # 'sub' contém o user_id
+                
                 print(f"{Colors.GREEN}✓ Autenticado com sucesso!{Colors.ENDC}")
                 print(f"  Usuário: {Colors.BOLD}{username}{Colors.ENDC}")
                 if self.current_user_id:
