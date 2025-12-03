@@ -68,62 +68,30 @@ coverage/
 demo-output.log
 demo-conversation.sh
 
-# Helper scripts and extra docs (keep local only)
-git-setup.sh
-MANUAL_TESTS.md
-PROGRESS.md
-PROGRESS_OLD.md
-PROGRESS_FINAL.md
-CHECKLIST.md
-CHECKLIST_ENTREGA3.md
-COMMIT_GUIDE.md
-CONTRIBUTING.md
-CLI_MELHORIAS.md
-CLI_MELHORIAS_V2.md
-GRUPO_FUNCIONALIDADES_TESTADAS.md
-GUIA_APRESENTACAO.md
-GUIA_RAPIDO_TESTE_OFFLINE.md
-GUIA_TESTES_ENTREGA3.md
-NOTIFICACOES_IMPLEMENTADAS.md
-PITCH_10MIN.md
-RELATORIO_TECNICO_ENTREGA2.md
-ROTEIRO_VALIDACAO_MANUAL.md
-TESTE_MANUAL_OFFLINE.md
-TESTE_NOTIFICACOES.md
-TESTE_UPLOAD_DOWNLOAD.md
-TEST_REPORT.md
-TEST_SUCCESS_REPORT.md
-WEBSOCKET_MIGRATION.md
-DADOS_TESTE_CARGA.txt
-docs/TDD_*.md
-docs/ENTREGA2_*.md
-docs/RESUMO_*.md
-docs/ATUALIZACAO_*.md
+# Ignore all markdown files in root EXCEPT core documentation
+/*.md
+!README.md
+!ARCHITECTURE.md
+!API.md
+!INSTALL.md
 
-# Status tracking files (temporary)
-STATUS.md
-STATUS_CURRENT.md
-STATUS_ENTREGA3.md
+# Ignore all .sh scripts in root (test/demo scripts)
+/*.sh
 
-# Course/project documentation (keep local only)
-esqueleto.md
-entrega1.md
-entrega2.md
-entrega3.md
-projeto.md
-entreg3.md.backup
+# Keep essential build scripts
+!build.sh
+!build-websocket.sh
 
-# Test and demo scripts (keep local only)
+# Ignore test/demo scripts in scripts folder
 scripts/test-*.sh
 scripts/demo-*.sh
 scripts/prepare-*.sh
 scripts/*-demo.sh
 scripts/smoke-*.sh
 scripts/populate-*.sh
-complete_test.sh
-demo-conversation.sh
-demo-entrega3.sh
-test-*.sh
+
+# Keep essential utility scripts in scripts/
+!scripts/cassandra-viewer.py
 
 # Build artifacts (keep source only)
 *.jar
