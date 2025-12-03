@@ -7,6 +7,7 @@ import chat4all.api.cassandra.CassandraMessageRepository;
 import chat4all.api.handler.FileDownloadHandler;
 import chat4all.api.handler.FileUploadHandler;
 import chat4all.api.http.AuthHandler;
+import chat4all.api.http.ConversationCreationHandler;
 import chat4all.api.http.ConversationsHandler;
 import chat4all.api.http.GroupConversationHandler;
 import chat4all.api.http.HealthCheckHandler;
@@ -14,11 +15,13 @@ import chat4all.api.http.MessagesHandler;
 import chat4all.api.http.MessageStatusHandler;
 import chat4all.api.http.MetricsHandler;
 import chat4all.api.http.MetricsInterceptor;
+import chat4all.api.http.UserConversationsHandler;
 import chat4all.api.http.UserIdentityHandler;
 import chat4all.api.http.UserRegistrationHandler;
 import chat4all.api.kafka.MessageProducer;
 import chat4all.api.messages.MessageValidator;
 import chat4all.api.repository.FileRepository;
+import chat4all.api.resolver.IdentityResolver;
 import com.sun.net.httpserver.HttpServer;
 
 import java.net.InetSocketAddress;
@@ -101,15 +104,18 @@ public class Main {
         CassandraConnection cassandraConnection = new CassandraConnection();
         CassandraMessageRepository messageRepository = new CassandraMessageRepository(cassandraConnection.getSession());
         FileRepository fileRepository = new FileRepository(cassandraConnection.getSession());
+        IdentityResolver identityResolver = new IdentityResolver(cassandraConnection.getSession());
         
         // 3. Create HTTP handlers
         AuthHandler authHandler = new AuthHandler(tokenGenerator, cassandraConnection.getSession());
         UserRegistrationHandler userRegistrationHandler = new UserRegistrationHandler(cassandraConnection.getSession());
         UserIdentityHandler userIdentityHandler = new UserIdentityHandler(cassandraConnection.getSession(), jwtAuthenticator);
         GroupConversationHandler groupHandler = new GroupConversationHandler(cassandraConnection.getSession(), jwtAuthenticator);
-        MessagesHandler messagesHandler = new MessagesHandler(messageValidator, messageProducer, jwtAuthenticator, fileRepository);
+        ConversationCreationHandler conversationCreationHandler = new ConversationCreationHandler(cassandraConnection.getSession(), jwtAuthenticator, identityResolver);
+        MessagesHandler messagesHandler = new MessagesHandler(messageValidator, messageProducer, jwtAuthenticator, fileRepository, identityResolver);
         MessageStatusHandler messageStatusHandler = new MessageStatusHandler(messageRepository, jwtAuthenticator);
         ConversationsHandler conversationsHandler = new ConversationsHandler(messageRepository, jwtAuthenticator, fileRepository);
+        UserConversationsHandler userConversationsHandler = new UserConversationsHandler(messageRepository, jwtAuthenticator);
         FileUploadHandler fileUploadHandler = new FileUploadHandler(fileRepository);
         FileDownloadHandler fileDownloadHandler = new FileDownloadHandler(fileRepository);
         HealthCheckHandler healthCheckHandler = new HealthCheckHandler(cassandraConnection.getSession(), messageProducer);
@@ -121,8 +127,21 @@ public class Main {
         // Register routes (wrapped with MetricsInterceptor for automatic metrics)
         server.createContext("/auth/register", new MetricsInterceptor(userRegistrationHandler));
         server.createContext("/auth/token", new MetricsInterceptor(authHandler));
-        server.createContext("/v1/users/identities", new MetricsInterceptor(userIdentityHandler));
+        server.createContext("/v1/users/", exchange -> {
+            String path = exchange.getRequestURI().getPath();
+            if (path.endsWith("/identities") || path.contains("/identities/")) {
+                userIdentityHandler.handle(exchange);
+            } else if (path.matches("/v1/users/[^/]+/conversations/?")) {
+                userConversationsHandler.handle(exchange);
+            } else {
+                String error = "{\"error\":\"Not found\"}";
+                exchange.sendResponseHeaders(404, error.length());
+                exchange.getResponseBody().write(error.getBytes());
+                exchange.getResponseBody().close();
+            }
+        });
         server.createContext("/v1/groups", new MetricsInterceptor(groupHandler));
+        server.createContext("/v1/conversations/create", new MetricsInterceptor(conversationCreationHandler));
         server.createContext("/v1/messages", new MetricsInterceptor(messagesHandler));
         server.createContext("/v1/conversations/", new MetricsInterceptor(conversationsHandler)); // Note: trailing slash for path matching
         server.createContext("/v1/files", new MetricsInterceptor(fileUploadHandler));

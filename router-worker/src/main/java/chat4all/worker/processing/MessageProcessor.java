@@ -2,10 +2,12 @@ package chat4all.worker.processing;
 
 import chat4all.shared.MessageEvent;
 import chat4all.worker.cassandra.CassandraMessageStore;
+import chat4all.worker.cassandra.ConversationRegistrar;
 import chat4all.worker.cassandra.MessageEntity;
 import chat4all.worker.metrics.WorkerMetricsRegistry;
 import chat4all.worker.routing.ConnectorRouter;
 import chat4all.worker.notifications.RedisNotificationPublisher;
+import chat4all.worker.resolver.IdentityResolver;
 
 import java.time.Instant;
 
@@ -53,6 +55,8 @@ public class MessageProcessor {
     private final ConnectorRouter connectorRouter;
     private final WorkerMetricsRegistry metricsRegistry;
     private final RedisNotificationPublisher notificationPublisher;
+    private final IdentityResolver identityResolver;
+    private final ConversationRegistrar conversationRegistrar;
     
     /**
      * Cria MessageProcessor
@@ -60,16 +64,22 @@ public class MessageProcessor {
      * @param messageStore Store para persistir mensagens
      * @param connectorRouter Router para conectores externos (WhatsApp, Instagram, etc.)
      * @param notificationPublisher Publisher para notificações via Redis (opcional)
+     * @param identityResolver Resolver para converter instagram:@, whatsapp:+ em user_id
+     * @param conversationRegistrar Registrar para adicionar conversas automaticamente
      */
     public MessageProcessor(
         CassandraMessageStore messageStore, 
         ConnectorRouter connectorRouter,
-        RedisNotificationPublisher notificationPublisher
+        RedisNotificationPublisher notificationPublisher,
+        IdentityResolver identityResolver,
+        ConversationRegistrar conversationRegistrar
     ) {
         this.messageStore = messageStore;
         this.connectorRouter = connectorRouter;
         this.metricsRegistry = WorkerMetricsRegistry.getInstance();
         this.notificationPublisher = notificationPublisher;
+        this.identityResolver = identityResolver;
+        this.conversationRegistrar = conversationRegistrar;
     }
     
     /**
@@ -132,6 +142,7 @@ public class MessageProcessor {
                 Instant.ofEpochMilli(event.getTimestamp()),
                 event.getMessageId(),
                 event.getSenderId(),
+                event.getRecipientId(),  // Recipient identifier for notifications
                 event.getContent(),
                 "SENT", // Status inicial
                 event.getFileId(), // Phase 2: file attachment
@@ -163,11 +174,55 @@ public class MessageProcessor {
                 System.out.println("[DEBUG] Using recipient_id: " + recipientId);
             }
             
+            // [3.1] RESOLVE RECIPIENT - Resolver identidade antes de rotear
+            String resolvedRecipientId = recipientId;
+            System.out.println("[DEBUG] identityResolver is null? " + (identityResolver == null));
+            System.out.println("[DEBUG] recipientId to resolve: " + recipientId);
+            
+            if (identityResolver != null) {
+                String resolved = identityResolver.resolveToUserId(recipientId);
+                System.out.println("[DEBUG] Resolved result: " + resolved);
+                
+                if (resolved != null && !resolved.isEmpty()) {
+                    resolvedRecipientId = resolved;
+                    System.out.println("[Processing] Resolved recipient " + recipientId + " → " + resolvedRecipientId);
+                    
+                    // [3.2] REGISTER CONVERSATION - Registrar conversa para o destinatário resolvido
+                    if (conversationRegistrar != null) {
+                        conversationRegistrar.registerConversationForUser(
+                            resolvedRecipientId,
+                            conversationId,
+                            event.getSenderId()
+                        );
+                    } else {
+                        System.out.println("[DEBUG] conversationRegistrar is NULL!");
+                    }
+                } else {
+                    System.out.println("[DEBUG] Resolved is NULL or EMPTY, not registering conversation");
+                }
+            } else {
+                System.out.println("[DEBUG] identityResolver is NULL, skipping resolution");
+            }
+            
             if (connectorRouter != null && connectorRouter.shouldRouteToConnector(recipientId)) {
                 // Route to external connector (WhatsApp, Instagram, etc.)
                 boolean routed = connectorRouter.routeToConnector(event);
                 if (routed) {
                     System.out.println("✓ [2/2] Routed to external connector for recipient: " + recipientId);
+                    
+                    // [3.3] PUBLISH NOTIFICATION - Notificar destinatário resolvido
+                    if (notificationPublisher != null && resolvedRecipientId != null) {
+                        notificationPublisher.publishNewMessageNotification(
+                            resolvedRecipientId,
+                            messageId,
+                            event.getSenderId(),
+                            conversationId,
+                            event.getContent(),
+                            event.getFileId()
+                        );
+                        System.out.println("✓ Notification published to Redis for user: " + resolvedRecipientId);
+                    }
+                    
                     System.out.println("✓ Processing complete for message: " + messageId + " (routed to connector)");
                     long duration = System.currentTimeMillis() - startTime;
                     metricsRegistry.recordMessageProcessed("ROUTED", duration);
@@ -202,17 +257,18 @@ public class MessageProcessor {
                 System.out.println("✓ Status updated to DELIVERED");
             }
             
-            // [6] PUBLISH NOTIFICATION - Notificar via Redis para WebSocket Gateway
-            if (notificationPublisher != null && recipientId != null && !recipientId.isEmpty()) {
+            // [6] PUBLISH NOTIFICATION - Notificar via Redis para WebSocket Gateway (LOCAL DELIVERY ONLY)
+            // Nota: Para mensagens roteadas, notificação já foi enviada no passo [3.3]
+            if (notificationPublisher != null && resolvedRecipientId != null && !resolvedRecipientId.isEmpty()) {
                 notificationPublisher.publishNewMessageNotification(
-                    recipientId,
+                    resolvedRecipientId,
                     messageId,
                     event.getSenderId(),
                     conversationId,
                     event.getContent(),
                     event.getFileId()
                 );
-                System.out.println("✓ Notification published to Redis for user: " + recipientId);
+                System.out.println("✓ Notification published to Redis for user: " + resolvedRecipientId);
             }
             
             System.out.println("✓ Processing complete for message: " + messageId);

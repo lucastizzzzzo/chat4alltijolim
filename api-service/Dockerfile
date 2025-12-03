@@ -17,6 +17,7 @@ COPY api-service/ api-service/
 COPY router-worker/pom.xml router-worker/pom.xml
 COPY connector-whatsapp/pom.xml connector-whatsapp/pom.xml
 COPY connector-instagram/pom.xml connector-instagram/pom.xml
+COPY websocket-gateway/pom.xml websocket-gateway/pom.xml
 
 # Build application (skip tests in Docker build - run separately)
 RUN mvn clean package -DskipTests -pl api-service -am

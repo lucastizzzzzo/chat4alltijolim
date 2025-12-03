@@ -51,6 +51,7 @@ public class MessageEntity {
     private final Instant timestamp;
     private final String messageId;
     private final String senderId;
+    private final String recipientId; // Recipient identifier
     private final String content;
     private String status;
     private final String fileId; // Phase 2: File attachment support
@@ -68,7 +69,7 @@ public class MessageEntity {
      */
     public MessageEntity(String conversationId, Instant timestamp, String messageId, 
                          String senderId, String content, String status) {
-        this(conversationId, timestamp, messageId, senderId, content, status, null, null);
+        this(conversationId, timestamp, messageId, senderId, null, content, status, null, null);
     }
     
     /**
@@ -78,18 +79,20 @@ public class MessageEntity {
      * @param timestamp Momento de criação
      * @param messageId ID único da mensagem
      * @param senderId Quem enviou
+     * @param recipientId Para quem está sendo enviado
      * @param content Texto da mensagem
      * @param status Status da mensagem
      * @param fileId ID do arquivo anexado (opcional)
      * @param fileMetadata Metadata do arquivo (opcional)
      */
     public MessageEntity(String conversationId, Instant timestamp, String messageId, 
-                         String senderId, String content, String status,
+                         String senderId, String recipientId, String content, String status,
                          String fileId, java.util.Map<String, String> fileMetadata) {
         this.conversationId = conversationId;
         this.timestamp = timestamp;
         this.messageId = messageId;
         this.senderId = senderId;
+        this.recipientId = recipientId;
         this.content = content;
         this.status = status;
         this.fileId = fileId;
@@ -112,6 +115,10 @@ public class MessageEntity {
     
     public String getSenderId() {
         return senderId;
+    }
+    
+    public String getRecipientId() {
+        return recipientId;
     }
     
     public String getContent() {

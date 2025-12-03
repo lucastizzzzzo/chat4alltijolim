@@ -43,6 +43,9 @@ CREATE TABLE IF NOT EXISTS messages (
     -- Sender information (denormalized for query efficiency)
     sender_id TEXT,
     
+    -- Recipient information (for notifications and filtering)
+    recipient_id TEXT,
+    
     -- Message content
     content TEXT,
     
@@ -138,6 +141,34 @@ CREATE INDEX IF NOT EXISTS users_by_username ON users (username);
 
 -- Optional: Add index on email for uniqueness check
 CREATE INDEX IF NOT EXISTS users_by_email ON users (email);
+
+-- ============================================================================
+-- CONVERSATIONS_BY_USER TABLE
+-- ============================================================================
+-- Purpose: Lookup table to find all conversations for a user
+-- Partition key: user_id - enables query "Get all conversations for user X"
+-- Clustering key: conversation_id - orders conversations
+--
+-- Educational notes:
+-- - Denormalized query table (data duplication is normal in Cassandra)
+-- - Updated when user joins/leaves conversation
+-- - Enables efficient discovery of user's conversations
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS conversations_by_user (
+    -- Partition key: user who participates in conversations
+    user_id TEXT,
+    
+    -- Clustering key: conversation identifier
+    conversation_id TEXT,
+    
+    -- Conversation metadata (denormalized for query efficiency)
+    type TEXT,  -- 'private' or 'group'
+    participant_ids LIST<TEXT>,
+    created_at TIMESTAMP,
+    
+    PRIMARY KEY (user_id, conversation_id)
+)
+WITH comment = 'Lookup table for user conversations';
 
 -- ============================================================================
 -- USER_IDENTITIES TABLE

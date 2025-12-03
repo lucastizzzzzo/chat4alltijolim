@@ -74,11 +74,11 @@ public class CassandraMessageStore {
     public CassandraMessageStore(CqlSession session) {
         this.session = session;
         
-        // Prepara INSERT statement (Phase 2: includes file_id and file_metadata)
+        // Prepara INSERT statement (Phase 2: includes file_id and file_metadata, recipient_id)
         // EDUCATIONAL NOTE: ? são placeholders para parâmetros
         this.insertStatement = session.prepare(
-            "INSERT INTO messages (conversation_id, timestamp, message_id, sender_id, content, status, file_id, file_metadata) " +
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+            "INSERT INTO messages (conversation_id, timestamp, message_id, sender_id, recipient_id, content, status, file_id, file_metadata) " +
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
         
         // Prepara UPDATE statement
@@ -133,12 +133,13 @@ public class CassandraMessageStore {
      */
     public boolean saveMessage(MessageEntity message) {
         try {
-            // Bind parâmetros ao PreparedStatement (Phase 2: includes file fields)
+            // Bind parâmetros ao PreparedStatement (Phase 2: includes file fields, recipient_id)
             session.execute(insertStatement.bind(
                 message.getConversationId(),
                 message.getTimestamp(),
                 message.getMessageId(),
                 message.getSenderId(),
+                message.getRecipientId(),    // Recipient identifier
                 message.getContent(),
                 message.getStatus(),
                 message.getFileId(),         // Phase 2: file attachment
@@ -147,8 +148,10 @@ public class CassandraMessageStore {
             
             String fileInfo = message.getFileId() != null ? 
                 " [file: " + message.getFileId() + "]" : "";
+            String recipientInfo = message.getRecipientId() != null ?
+                " → " + message.getRecipientId() : "";
             System.out.println("✓ Saved message: " + message.getMessageId() + 
-                             " (conv: " + message.getConversationId() + ")" + fileInfo);
+                             " (conv: " + message.getConversationId() + ")" + recipientInfo + fileInfo);
             return true;
             
         } catch (Exception e) {

@@ -134,9 +134,27 @@ public class Main {
             new chat4all.worker.notifications.RedisNotificationPublisher(redisHost, redisPort);
         System.out.println();
         
+        // Initialize identity resolver (resolve instagram:@, whatsapp:+ to user_id)
+        System.out.println("▶ Initializing identity resolver...");
+        chat4all.worker.resolver.IdentityResolver identityResolver = 
+            new chat4all.worker.resolver.IdentityResolver(cassandraConnection.getSession());
+        System.out.println();
+        
+        // Initialize conversation registrar (auto-register conversations for recipients)
+        System.out.println("▶ Initializing conversation registrar...");
+        chat4all.worker.cassandra.ConversationRegistrar conversationRegistrar =
+            new chat4all.worker.cassandra.ConversationRegistrar(cassandraConnection.getSession());
+        System.out.println();
+        
         // Initialize message processor
         System.out.println("▶ Initializing message processor...");
-        MessageProcessor messageProcessor = new MessageProcessor(messageStore, connectorRouter, notificationPublisher);
+        MessageProcessor messageProcessor = new MessageProcessor(
+            messageStore, 
+            connectorRouter, 
+            notificationPublisher, 
+            identityResolver,
+            conversationRegistrar
+        );
         System.out.println("✓ MessageProcessor initialized\n");
         
         // Initialize Kafka consumer

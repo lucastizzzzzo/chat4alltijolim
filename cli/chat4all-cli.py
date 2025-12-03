@@ -215,34 +215,61 @@ class Chat4AllCLI:
             print(f"{Colors.RED}❌ Erro de conexão: {e}{Colors.ENDC}")
     
     def list_conversations(self):
-        """Lista conversas do usuário"""
+        """Lista conversas do usuário (busca da API)"""
         if not self.token:
             print(f"{Colors.RED}❌ Você precisa autenticar primeiro (opção 2){Colors.ENDC}")
             return
         
+        if not self.current_user_id:
+            print(f"{Colors.RED}❌ user_id não disponível{Colors.ENDC}")
+            return
+        
         print(f"\n{Colors.BOLD}💬 Minhas Conversas{Colors.ENDC}")
         
-        # Mostrar conversas criadas nesta sessão
-        if self.conversation_names:
-            print(f"\n{Colors.GREEN}✓ Conversas criadas nesta sessão:{Colors.ENDC}\n")
+        try:
+            # Buscar conversas da API
+            url = f"{self.api_url}/v1/users/{self.current_user_id}/conversations"
+            headers = {"Authorization": f"Bearer {self.token}"}
             
-            for i, (conv_id, info) in enumerate(self.conversation_names.items(), 1):
-                name = info.get('name', 'Sem nome')
-                members = info.get('members', [])
-                created = info.get('created_at', '')
+            response = requests.get(url, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                conversations = data.get('conversations', [])
                 
-                print(f"{Colors.BOLD}{i}.{Colors.ENDC} {name}")
-                print(f"   {Colors.CYAN}ID:{Colors.ENDC} {conv_id}")
-                if members:
-                    print(f"   {Colors.CYAN}Membros ({len(members)}):{Colors.ENDC}")
-                    for member in members[:5]:  # Mostrar até 5
-                        print(f"     • {member}")
-                    if len(members) > 5:
-                        print(f"     ... e mais {len(members) - 5}")
-                print()
-        else:
-            print(f"\n{Colors.YELLOW}Nenhuma conversa criada nesta sessão.{Colors.ENDC}")
-            print(f"{Colors.CYAN}💡 Use a opção 4 para criar uma nova conversa!{Colors.ENDC}\n")
+                if conversations:
+                    print(f"\n{Colors.GREEN}✓ {len(conversations)} conversa(s) encontrada(s):{Colors.ENDC}\n")
+                    
+                    for i, conv in enumerate(conversations, 1):
+                        conv_id = conv.get('conversation_id', 'N/A')
+                        conv_name = conv.get('name', conv_id)  # Usar nome se disponível, senão ID
+                        conv_type = conv.get('type', 'N/A')
+                        members = conv.get('participant_ids', [])
+                        created_at = conv.get('created_at', 0)
+                        
+                        # Filtrar membros (excluir o próprio usuário)
+                        other_members = [m for m in members if m != self.current_user_id]
+                        
+                        print(f"{Colors.BOLD}{i}.{Colors.ENDC} {conv_name}")
+                        print(f"   {Colors.CYAN}ID:{Colors.ENDC} {conv_id}")
+                        print(f"   {Colors.CYAN}Tipo:{Colors.ENDC} {conv_type}")
+                        if other_members:
+                            print(f"   {Colors.CYAN}Outros membros ({len(other_members)}):{Colors.ENDC}")
+                            for member in other_members[:5]:  # Mostrar até 5
+                                print(f"     • {member}")
+                            if len(other_members) > 5:
+                                print(f"     ... e mais {len(other_members) - 5}")
+                        print()
+                else:
+                    print(f"\n{Colors.YELLOW}Nenhuma conversa encontrada.{Colors.ENDC}")
+                    print(f"{Colors.CYAN}💡 Use a opção 4 para criar uma nova conversa!{Colors.ENDC}\n")
+            else:
+                print(f"{Colors.RED}❌ Erro ao buscar conversas: {response.status_code}{Colors.ENDC}")
+                if response.text:
+                    print(f"{Colors.RED}  {response.text}{Colors.ENDC}")
+                    
+        except requests.exceptions.RequestException as e:
+            print(f"{Colors.RED}❌ Erro de conexão: {e}{Colors.ENDC}")
     
     def create_conversation(self):
         """Cria nova conversa com ID gerado automaticamente e opção de adicionar membros"""
@@ -281,6 +308,32 @@ class Chat4AllCLI:
                     members.append(member)
                     print(f"{Colors.GREEN}  ✓ Adicionado: {member}{Colors.ENDC}")
         
+        # Persistir no backend via API
+        try:
+            # Montar lista de participantes (adicionar o próprio usuário)
+            participant_ids = [self.current_user_id] + members if self.current_user_id else members
+            
+            payload = {
+                "conversation_id": conv_id,
+                "name": conv_name,
+                "participant_ids": participant_ids
+            }
+            
+            response = requests.post(
+                f"{self.api_url}/v1/conversations/create",
+                headers={"Authorization": f"Bearer {self.token}"},
+                json=payload,
+                timeout=10
+            )
+            
+            if response.status_code in [200, 201]:
+                print(f"\n{Colors.GREEN}✅ Conversa criada e persistida no servidor!{Colors.ENDC}")
+            else:
+                print(f"\n{Colors.YELLOW}⚠ Conversa criada localmente, mas erro ao persistir: {response.status_code}{Colors.ENDC}")
+                print(f"  {response.text}")
+        except requests.exceptions.RequestException as e:
+            print(f"\n{Colors.YELLOW}⚠ Conversa criada localmente, mas erro de conexão: {e}{Colors.ENDC}")
+        
         # Salvar na memória para uso posterior
         self.current_conversation = conv_id
         self.conversation_names[conv_id] = {
@@ -289,7 +342,7 @@ class Chat4AllCLI:
             'created_at': datetime.now().isoformat()
         }
         
-        print(f"\n{Colors.GREEN}✅ Conversa criada com sucesso!{Colors.ENDC}")
+        print(f"\n{Colors.GREEN}✓ Conversa registrada com sucesso!{Colors.ENDC}")
         print(f"  {Colors.BOLD}Nome:{Colors.ENDC} {conv_name}")
         print(f"  {Colors.BOLD}ID:{Colors.ENDC} {conv_id}")
         if members:
@@ -372,28 +425,171 @@ class Chat4AllCLI:
         except requests.exceptions.RequestException as e:
             print(f"{Colors.RED}❌ Erro de conexão: {e}{Colors.ENDC}")
     
+    def _select_conversation(self):
+        """Função auxiliar para selecionar uma conversa - retorna (conversation_id, members) ou (None, None)"""
+        if not self.current_user_id:
+            return None, None
+        
+        try:
+            # Buscar conversas da API
+            url = f"{self.api_url}/v1/users/{self.current_user_id}/conversations"
+            headers = {"Authorization": f"Bearer {self.token}"}
+            
+            response = requests.get(url, headers=headers, timeout=10)
+            
+            if response.status_code != 200:
+                print(f"{Colors.RED}❌ Erro ao buscar conversas: {response.status_code}{Colors.ENDC}")
+                return None, None
+            
+            data = response.json()
+            conversations = data.get('conversations', [])
+            
+            if not conversations:
+                print(f"\n{Colors.YELLOW}Você não tem conversas ainda.{Colors.ENDC}")
+                print(f"{Colors.CYAN}💡 Use a opção 4 para criar uma nova conversa!{Colors.ENDC}\n")
+                return None, None
+            
+            # Mostrar lista numerada
+            print(f"\n{Colors.GREEN}✓ {len(conversations)} conversa(s) disponível(is):{Colors.ENDC}\n")
+            
+            for i, conv in enumerate(conversations, 1):
+                conv_id = conv.get('conversation_id', 'N/A')
+                conv_name = conv.get('name', conv_id)
+                other_members = [m for m in conv.get('participant_ids', []) if m != self.current_user_id]
+                
+                print(f"{Colors.BOLD}{i}.{Colors.ENDC} {conv_name}")
+                print(f"   {Colors.CYAN}ID:{Colors.ENDC} {conv_id}")
+                if other_members:
+                    print(f"   {Colors.CYAN}Membros:{Colors.ENDC} {', '.join(other_members[:3])}")
+                    if len(other_members) > 3:
+                        print(f"     ... e mais {len(other_members) - 3}")
+                print()
+            
+            # Pedir seleção
+            choice = input(f"{Colors.CYAN}Escolha o número da conversa (ou ENTER para cancelar):{Colors.ENDC} ").strip()
+            
+            if not choice:
+                return None, None
+            
+            # Interpretar como número
+            if choice.isdigit():
+                idx = int(choice) - 1
+                if 0 <= idx < len(conversations):
+                    selected = conversations[idx]
+                    conv_id = selected.get('conversation_id')
+                    members = [m for m in selected.get('participant_ids', []) if m != self.current_user_id]
+                    
+                    # Salvar como conversa atual
+                    self.current_conversation = conv_id
+                    self.conversation_names[conv_id] = {
+                        'name': selected.get('name', conv_id),
+                        'members': members
+                    }
+                    
+                    return conv_id, members
+                else:
+                    print(f"{Colors.RED}❌ Número inválido{Colors.ENDC}")
+                    return None, None
+            else:
+                print(f"{Colors.RED}❌ Por favor, digite um número{Colors.ENDC}")
+                return None, None
+                
+        except requests.exceptions.RequestException as e:
+            print(f"{Colors.RED}❌ Erro de conexão: {e}{Colors.ENDC}")
+            return None, None
+    
     def send_message(self):
-        """Envia mensagem de texto simples"""
+        """Envia mensagem - suporta mensagem em grupo ou chat privado"""
         if not self.token:
             print(f"{Colors.RED}❌ Você precisa autenticar primeiro (opção 2){Colors.ENDC}")
             return
         
         print(f"\n{Colors.BOLD}📨 Enviar Mensagem{Colors.ENDC}")
         
-        # Usar conversa atual se existir, senão pedir
+        # Opção 1: Usar conversa atual OU selecionar de uma lista
+        print(f"\n{Colors.BOLD}Selecione a conversa:{Colors.ENDC}")
+        print(f"  {Colors.GREEN}1.{Colors.ENDC} Selecionar de suas conversas")
+        print(f"  {Colors.GREEN}2.{Colors.ENDC} Enviar mensagem privada (cria conversa se necessário)")
         if self.current_conversation:
-            print(f"{Colors.GREEN}✓ Usando conversa atual:{Colors.ENDC} {Colors.BOLD}{self.current_conversation}{Colors.ENDC}")
-            use_current = input(f"{Colors.CYAN}Usar esta conversa? (S/n):{Colors.ENDC} ").strip().lower()
+            print(f"  {Colors.GREEN}3.{Colors.ENDC} Usar conversa atual: {Colors.BOLD}{self.current_conversation}{Colors.ENDC}")
+        
+        mode = input(f"{Colors.CYAN}Opção:{Colors.ENDC} ").strip()
+        
+        conversation_id = None
+        recipient_id = None
+        members = []
+        
+        if mode == '1':
+            # Selecionar conversa da lista
+            conversation_id, members = self._select_conversation()
+            if not conversation_id:
+                return
             
-            if use_current in ['', 's', 'y', 'sim', 'yes']:
+            # Usar primeiro membro como recipient
+            if members:
+                recipient_id = members[0]
+                print(f"{Colors.YELLOW}📢 Enviando para conversa (recipient: {recipient_id}){Colors.ENDC}")
+            else:
+                recipient_id = input(f"{Colors.CYAN}Recipient ID:{Colors.ENDC} ").strip()
+                
+        elif mode == '2':
+            # Chat privado
+            return self._send_private_message()
+            
+        elif mode == '3' and self.current_conversation:
+            # Usar conversa atual
+            conversation_id = self.current_conversation
+            print(f"\n{Colors.GREEN}✓ Conversa atual:{Colors.ENDC} {Colors.BOLD}{self.current_conversation}{Colors.ENDC}")
+            
+            # Buscar info da conversa
+            conv_info = self.conversation_names.get(self.current_conversation, {})
+            members = conv_info.get('members', [])
+            
+            if members:
+                print(f"{Colors.CYAN}Membros:{Colors.ENDC} {', '.join(members[:5])}")
+            
+            print(f"\n{Colors.BOLD}Escolha o tipo de mensagem:{Colors.ENDC}")
+            print(f"  {Colors.GREEN}1.{Colors.ENDC} Enviar para toda a conversa (grupo)")
+            print(f"  {Colors.GREEN}2.{Colors.ENDC} Enviar mensagem privada para um membro")
+            print(f"  {Colors.GREEN}3.{Colors.ENDC} Usar conversa diferente")
+            
+            msg_type = input(f"{Colors.CYAN}Opção (1/2/3):{Colors.ENDC} ").strip()
+            
+            if msg_type == '1':
+                # Mensagem em grupo - pegar primeiro membro como recipient
                 conversation_id = self.current_conversation
+                if members:
+                    recipient_id = members[0]
+                    print(f"{Colors.YELLOW}📢 Enviando para grupo (recipient: {recipient_id}){Colors.ENDC}")
+                else:
+                    recipient_id = input(f"{Colors.CYAN}Recipient ID:{Colors.ENDC} ").strip()
+                    
+            elif msg_type == '2':
+                # Chat privado
+                return self._send_private_message()
+                
+            elif msg_type == '3':
+                # Usar conversa diferente
+                conversation_id = input(f"{Colors.CYAN}Conversation ID:{Colors.ENDC} ").strip()
+                recipient_id = input(f"{Colors.CYAN}Recipient ID:{Colors.ENDC} ").strip()
+            else:
+                print(f"{Colors.RED}❌ Opção inválida{Colors.ENDC}")
+                return
+        else:
+            # Sem conversa selecionada - pedir tudo
+            print(f"{Colors.YELLOW}💡 Nenhuma conversa selecionada. Você pode:{Colors.ENDC}")
+            print(f"  1. Criar uma conversa primeiro (opção 4)")
+            print(f"  2. Enviar mensagem privada para um usuário")
+            print()
+            
+            choice = input(f"{Colors.CYAN}Enviar mensagem privada? (S/n):{Colors.ENDC} ").strip().lower()
+            
+            if choice in ['', 's', 'y', 'sim', 'yes']:
+                return self._send_private_message()
             else:
                 conversation_id = input(f"{Colors.CYAN}Conversation ID:{Colors.ENDC} ").strip()
-        else:
-            conversation_id = input(f"{Colors.CYAN}Conversation ID:{Colors.ENDC} ").strip()
-            print(f"{Colors.YELLOW}💡 Dica: Crie uma conversa primeiro (opção 4) para não precisar digitar o ID{Colors.ENDC}")
+                recipient_id = input(f"{Colors.CYAN}Recipient ID:{Colors.ENDC} ").strip()
         
-        recipient_id = input(f"{Colors.CYAN}Recipient ID (ex: whatsapp:+5511999998888 ou instagram:@usuario):{Colors.ENDC} ").strip()
         content = input(f"{Colors.CYAN}Mensagem:{Colors.ENDC} ").strip()
         
         if not all([conversation_id, recipient_id, content]):
@@ -406,8 +602,6 @@ class Chat4AllCLI:
                 "recipient_id": recipient_id,
                 "content": content
             }
-            
-            # Não enviar sender_id - API extrai do token JWT
             
             response = requests.post(
                 f"{self.api_url}/v1/messages",
@@ -429,30 +623,190 @@ class Chat4AllCLI:
         except requests.exceptions.RequestException as e:
             print(f"{Colors.RED}❌ Erro de conexão: {e}{Colors.ENDC}")
     
+    def _send_private_message(self):
+        """Envia mensagem privada 1:1 - cria conversa se não existir"""
+        print(f"\n{Colors.BOLD}💬 Mensagem Privada (1:1){Colors.ENDC}")
+        
+        recipient_id = input(f"{Colors.CYAN}Para quem? (formato: instagram:@usuario ou whatsapp:+55...):{Colors.ENDC} ").strip()
+        
+        if not recipient_id:
+            print(f"{Colors.RED}❌ Destinatário é obrigatório{Colors.ENDC}")
+            return
+        
+        content = input(f"{Colors.CYAN}Mensagem:{Colors.ENDC} ").strip()
+        
+        if not content:
+            print(f"{Colors.RED}❌ Mensagem é obrigatória{Colors.ENDC}")
+            return
+        
+        # Criar conversa privada automaticamente
+        safe_name = recipient_id.replace(':', '_').replace('@', '').replace('+', '')[:20]
+        timestamp = int(time.time())
+        conversation_id = f"priv_{safe_name}_{timestamp}"
+        
+        print(f"\n{Colors.YELLOW}📝 Criando conversa privada: {conversation_id}{Colors.ENDC}")
+        
+        try:
+            # Criar conversa
+            conv_payload = {
+                "conversation_id": conversation_id,
+                "name": f"Chat com {recipient_id}",
+                "type": "private",
+                "participant_ids": [recipient_id]
+            }
+            
+            conv_response = requests.post(
+                f"{self.api_url}/v1/conversations",
+                headers={"Authorization": f"Bearer {self.token}"},
+                json=conv_payload,
+                timeout=10
+            )
+            
+            if conv_response.status_code not in [200, 201]:
+                print(f"{Colors.RED}❌ Erro ao criar conversa: {conv_response.status_code}{Colors.ENDC}")
+                return
+            
+            print(f"{Colors.GREEN}✓ Conversa criada{Colors.ENDC}")
+            
+            # Enviar mensagem
+            msg_payload = {
+                "conversation_id": conversation_id,
+                "recipient_id": recipient_id,
+                "content": content
+            }
+            
+            msg_response = requests.post(
+                f"{self.api_url}/v1/messages",
+                headers={"Authorization": f"Bearer {self.token}"},
+                json=msg_payload,
+                timeout=10
+            )
+            
+            if msg_response.status_code in [200, 201, 202]:
+                data = msg_response.json()
+                print(f"{Colors.GREEN}✓ Mensagem privada enviada!{Colors.ENDC}")
+                print(f"  Message ID: {Colors.BOLD}{data.get('message_id')}{Colors.ENDC}")
+                
+                # Salvar conversa como atual
+                self.current_conversation = conversation_id
+                self.conversation_names[conversation_id] = {
+                    'name': f"Chat com {recipient_id}",
+                    'members': [recipient_id]
+                }
+            else:
+                print(f"{Colors.RED}❌ Erro ao enviar mensagem: {msg_response.status_code}{Colors.ENDC}")
+                
+        except requests.exceptions.RequestException as e:
+            print(f"{Colors.RED}❌ Erro de conexão: {e}{Colors.ENDC}")
+    
     def send_message_with_file(self):
-        """Envia mensagem com arquivo anexado - faz upload automático"""
+        """Envia mensagem com arquivo anexado - usa mesma lógica da opção 5"""
         if not self.token:
-            print(f"{Colors.RED}❌ Você precisa autenticar primeiro (opção 1){Colors.ENDC}")
+            print(f"{Colors.RED}❌ Você precisa autenticar primeiro (opção 2){Colors.ENDC}")
             return
         
         print(f"\n{Colors.BOLD}📎 Enviar Mensagem com Arquivo{Colors.ENDC}")
         
+        # Primeiro: pedir o arquivo
         file_path = input(f"{Colors.CYAN}Caminho do arquivo:{Colors.ENDC} ").strip()
-        conversation_id = input(f"{Colors.CYAN}Conversation ID:{Colors.ENDC} ").strip()
-        recipient_id = input(f"{Colors.CYAN}Recipient ID:{Colors.ENDC} ").strip()
-        content = input(f"{Colors.CYAN}Mensagem:{Colors.ENDC} ").strip()
         
-        if not all([file_path, conversation_id, recipient_id, content]):
-            print(f"{Colors.RED}❌ Todos os campos são obrigatórios{Colors.ENDC}")
+        if not file_path:
+            print(f"{Colors.RED}❌ Caminho do arquivo é obrigatório{Colors.ENDC}")
             return
         
         if not os.path.exists(file_path):
             print(f"{Colors.RED}❌ Arquivo não encontrado: {file_path}{Colors.ENDC}")
             return
         
+        # Segundo: selecionar conversa (mesma lógica da opção 5)
+        print(f"\n{Colors.BOLD}Selecione a conversa:{Colors.ENDC}")
+        print(f"  {Colors.GREEN}1.{Colors.ENDC} Selecionar de suas conversas")
+        print(f"  {Colors.GREEN}2.{Colors.ENDC} Enviar para chat privado (cria conversa se necessário)")
+        if self.current_conversation:
+            print(f"  {Colors.GREEN}3.{Colors.ENDC} Usar conversa atual: {Colors.BOLD}{self.current_conversation}{Colors.ENDC}")
+        
+        mode = input(f"{Colors.CYAN}Opção:{Colors.ENDC} ").strip()
+        
+        conversation_id = None
+        recipient_id = None
+        members = []
+        
+        if mode == '1':
+            # Selecionar conversa da lista
+            conversation_id, members = self._select_conversation()
+            if not conversation_id:
+                return
+            
+            # Usar primeiro membro como recipient
+            if members:
+                recipient_id = members[0]
+                print(f"{Colors.YELLOW}📢 Enviando para conversa (recipient: {recipient_id}){Colors.ENDC}")
+            else:
+                recipient_id = input(f"{Colors.CYAN}Recipient ID:{Colors.ENDC} ").strip()
+                
+        elif mode == '2':
+            # Chat privado - pedir recipient
+            recipient_id = input(f"{Colors.CYAN}Para quem? (formato: instagram:@usuario ou whatsapp:+55...):{Colors.ENDC} ").strip()
+            
+            if not recipient_id:
+                print(f"{Colors.RED}❌ Destinatário é obrigatório{Colors.ENDC}")
+                return
+            
+            # Criar conversa privada
+            safe_name = recipient_id.replace(':', '_').replace('@', '').replace('+', '')[:20]
+            timestamp = int(time.time())
+            conversation_id = f"priv_{safe_name}_{timestamp}"
+            
+            print(f"\n{Colors.YELLOW}📝 Criando conversa privada: {conversation_id}{Colors.ENDC}")
+            
+        elif mode == '3' and self.current_conversation:
+            # Usar conversa atual
+            conversation_id = self.current_conversation
+            conv_info = self.conversation_names.get(self.current_conversation, {})
+            members = conv_info.get('members', [])
+            
+            if members:
+                recipient_id = members[0]
+                print(f"{Colors.GREEN}✓ Usando conversa atual{Colors.ENDC}")
+                print(f"{Colors.YELLOW}📢 Recipient: {recipient_id}{Colors.ENDC}")
+            else:
+                recipient_id = input(f"{Colors.CYAN}Recipient ID:{Colors.ENDC} ").strip()
+        else:
+            print(f"{Colors.RED}❌ Opção inválida{Colors.ENDC}")
+            return
+        
+        # Terceiro: pedir mensagem
+        content = input(f"{Colors.CYAN}Mensagem (descrição do arquivo):{Colors.ENDC} ").strip()
+        
+        if not all([conversation_id, recipient_id, content]):
+            print(f"{Colors.RED}❌ Todos os campos são obrigatórios{Colors.ENDC}")
+            return
+        
         try:
-            # 1. Upload do arquivo primeiro
-            print(f"{Colors.YELLOW}Fazendo upload do arquivo...{Colors.ENDC}")
+            # Se for chat privado novo, criar conversa primeiro
+            if mode == '2':
+                conv_payload = {
+                    "conversation_id": conversation_id,
+                    "name": f"Chat com {recipient_id}",
+                    "type": "private",
+                    "participant_ids": [recipient_id]
+                }
+                
+                conv_response = requests.post(
+                    f"{self.api_url}/v1/conversations",
+                    headers={"Authorization": f"Bearer {self.token}"},
+                    json=conv_payload,
+                    timeout=10
+                )
+                
+                if conv_response.status_code not in [200, 201]:
+                    print(f"{Colors.RED}❌ Erro ao criar conversa: {conv_response.status_code}{Colors.ENDC}")
+                    return
+                
+                print(f"{Colors.GREEN}✓ Conversa criada{Colors.ENDC}")
+            
+            # 1. Upload do arquivo
+            print(f"{Colors.YELLOW}📤 Fazendo upload do arquivo...{Colors.ENDC}")
             with open(file_path, 'rb') as f:
                 files = {'file': f}
                 data = {'conversation_id': conversation_id}
@@ -481,8 +835,6 @@ class Chat4AllCLI:
                 "file_id": file_id
             }
             
-            # Não enviar sender_id - API extrai do token JWT
-            
             response = requests.post(
                 f"{self.api_url}/v1/messages",
                 headers={"Authorization": f"Bearer {self.token}"},
@@ -497,6 +849,14 @@ class Chat4AllCLI:
                 print(f"  File ID: {file_id}")
                 if response.status_code == 202:
                     print(f"  {Colors.YELLOW}Processamento assíncrono (aguarde alguns segundos){Colors.ENDC}")
+                
+                # Salvar conversa atual
+                if mode == '2':
+                    self.current_conversation = conversation_id
+                    self.conversation_names[conversation_id] = {
+                        'name': f"Chat com {recipient_id}",
+                        'members': [recipient_id]
+                    }
             else:
                 print(f"{Colors.RED}❌ Erro ao enviar: {response.status_code}{Colors.ENDC}")
         except requests.exceptions.RequestException as e:
@@ -505,21 +865,75 @@ class Chat4AllCLI:
             print(f"{Colors.RED}❌ Erro: {e}{Colors.ENDC}")
     
     def list_messages(self):
-        """Lista mensagens de uma conversa ou de todas as conversas"""
+        """Lista mensagens de uma conversa - mostra menu de conversas para selecionar"""
         if not self.token:
-            print(f"{Colors.RED}❌ Você precisa autenticar primeiro (opção 1){Colors.ENDC}")
+            print(f"{Colors.RED}❌ Você precisa autenticar primeiro (opção 2){Colors.ENDC}")
+            return
+        
+        if not self.current_user_id:
+            print(f"{Colors.RED}❌ user_id não disponível{Colors.ENDC}")
             return
         
         print(f"\n{Colors.BOLD}💬 Listar Mensagens{Colors.ENDC}")
         
-        conversation_id = input(f"{Colors.CYAN}Conversation ID (deixe vazio para ver TODAS):{Colors.ENDC} ").strip()
-        limit = input(f"{Colors.CYAN}Limite por conversa (padrão 10):{Colors.ENDC} ").strip() or "10"
-        
-        # Se não especificar conversation_id, mostra mensagem instrucional
-        if not conversation_id:
-            print(f"\n{Colors.YELLOW}📋 Mostrando mensagens de TODAS as suas conversas...{Colors.ENDC}\n")
-            self._show_recent_conversations()
+        # Buscar conversas da API
+        try:
+            url = f"{self.api_url}/v1/users/{self.current_user_id}/conversations"
+            headers = {"Authorization": f"Bearer {self.token}"}
+            
+            response = requests.get(url, headers=headers, timeout=10)
+            
+            if response.status_code != 200:
+                print(f"{Colors.RED}❌ Erro ao buscar conversas: {response.status_code}{Colors.ENDC}")
+                return
+            
+            data = response.json()
+            conversations = data.get('conversations', [])
+            
+            if not conversations:
+                print(f"\n{Colors.YELLOW}Nenhuma conversa encontrada.{Colors.ENDC}")
+                print(f"{Colors.CYAN}💡 Use a opção 4 para criar uma nova conversa!{Colors.ENDC}\n")
+                return
+            
+            # Mostrar lista numerada de conversas
+            print(f"\n{Colors.GREEN}✓ {len(conversations)} conversa(s) encontrada(s):{Colors.ENDC}\n")
+            
+            for i, conv in enumerate(conversations, 1):
+                conv_id = conv.get('conversation_id', 'N/A')
+                conv_name = conv.get('name', conv_id)
+                other_members = [m for m in conv.get('participant_ids', []) if m != self.current_user_id]
+                
+                print(f"{Colors.BOLD}{i}.{Colors.ENDC} {conv_name}")
+                print(f"   {Colors.CYAN}ID:{Colors.ENDC} {conv_id}")
+                if other_members:
+                    print(f"   {Colors.CYAN}Membros:{Colors.ENDC} {', '.join(other_members[:3])}")
+                print()
+            
+            # Pedir seleção por número ou ID direto
+            choice = input(f"{Colors.CYAN}Escolha o número da conversa (ou digite o ID completo):{Colors.ENDC} ").strip()
+            
+            if not choice:
+                return
+            
+            # Tentar interpretar como número
+            conversation_id = None
+            if choice.isdigit():
+                idx = int(choice) - 1
+                if 0 <= idx < len(conversations):
+                    conversation_id = conversations[idx].get('conversation_id')
+                else:
+                    print(f"{Colors.RED}❌ Número inválido{Colors.ENDC}")
+                    return
+            else:
+                # Assumir que é um ID completo
+                conversation_id = choice
+            
+        except requests.exceptions.RequestException as e:
+            print(f"{Colors.RED}❌ Erro de conexão: {e}{Colors.ENDC}")
             return
+        
+        # Buscar limite
+        limit = input(f"{Colors.CYAN}Limite de mensagens (padrão 20):{Colors.ENDC} ").strip() or "20"
         
         try:
             params = {"limit": limit}
@@ -935,9 +1349,19 @@ class Chat4AllCLI:
             threading.Thread(target=ping_thread, daemon=True).start()
         
         # Criar WebSocketApp
-        # WebSocket precisa do user_id na URL
-        ws_url = f"{self.websocket_url}?userId={self.current_user_id}"
-        print(f"{Colors.CYAN}Conectando ao WebSocket: {ws_url}{Colors.ENDC}")
+        # WebSocket precisa do token JWT na URL
+        if not self.current_user_id:
+            print(f"{Colors.RED}❌ user_id não disponível. Autentique novamente.{Colors.ENDC}")
+            self.notifications_enabled = False
+            return
+        
+        if not self.token:
+            print(f"{Colors.RED}❌ Token não disponível. Autentique novamente.{Colors.ENDC}")
+            self.notifications_enabled = False
+            return
+        
+        ws_url = f"{self.websocket_url}/notifications?token={self.token}"
+        print(f"{Colors.CYAN}Conectando ao WebSocket: {ws_url[:60]}...{Colors.ENDC}")
         
         self.ws = websocket.WebSocketApp(
             ws_url,

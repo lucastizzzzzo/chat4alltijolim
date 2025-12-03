@@ -56,6 +56,7 @@ public class CassandraMessageRepository {
     
     private final CqlSession session;
     private final PreparedStatement getMessagesStatement;
+    private final PreparedStatement getConversationsByUserStatement;
     
     /**
      * Cria repository com PreparedStatement
@@ -74,11 +75,18 @@ public class CassandraMessageRepository {
         
         // Query otimizada: usa partition key + clustering key (Phase 2: includes file fields)
         this.getMessagesStatement = session.prepare(
-            "SELECT conversation_id, timestamp, message_id, sender_id, content, status, file_id, file_metadata " +
+            "SELECT conversation_id, timestamp, message_id, sender_id, recipient_id, content, status, file_id, file_metadata " +
             "FROM messages " +
             "WHERE conversation_id = ? " +
             "ORDER BY timestamp ASC"
             // LIMIT aplicado dinamicamente no bind
+        );
+        
+        // Query to get user's conversations
+        this.getConversationsByUserStatement = session.prepare(
+            "SELECT conversation_id, type, participant_ids, name, created_at " +
+            "FROM conversations_by_user " +
+            "WHERE user_id = ?"
         );
         
         System.out.println("✓ CassandraMessageRepository initialized");
@@ -158,6 +166,7 @@ public class CassandraMessageRepository {
                 message.put("message_id", row.getString("message_id"));
                 message.put("conversation_id", row.getString("conversation_id"));
                 message.put("sender_id", row.getString("sender_id"));
+                message.put("recipient_id", row.getString("recipient_id"));
                 message.put("content", row.getString("content"));
                 message.put("status", row.getString("status"));
                 
@@ -294,5 +303,56 @@ public class CassandraMessageRepository {
         // Simplified: retorna -1 (não implementado para Fase 1)
         // Em produção: usar COUNTER table
         return -1;
+    }
+    
+    /**
+     * Get all conversations for a user
+     * 
+     * EDUCATIONAL NOTE: Query Pattern for User Conversations
+     * 
+     * Uses denormalized table conversations_by_user:
+     * - Partition key: user_id
+     * - Enables efficient query: "Get all conversations for user X"
+     * - Data duplication is normal in Cassandra (query-driven design)
+     * 
+     * @param userId User ID
+     * @return List of conversations with metadata
+     */
+    public List<Map<String, Object>> getConversationsByUser(String userId) {
+        List<Map<String, Object>> conversations = new ArrayList<>();
+        
+        if (userId == null || userId.trim().isEmpty()) {
+            throw new IllegalArgumentException("user_id cannot be null or empty");
+        }
+        
+        try {
+            ResultSet rs = session.execute(getConversationsByUserStatement.bind(userId));
+            
+            for (Row row : rs) {
+                Map<String, Object> conversation = new HashMap<>();
+                conversation.put("conversation_id", row.getString("conversation_id"));
+                conversation.put("type", row.getString("type"));
+                conversation.put("participant_ids", row.getList("participant_ids", String.class));
+                
+                String name = row.getString("name");
+                if (name != null && !name.isEmpty()) {
+                    conversation.put("name", name);
+                }
+                
+                Instant createdAt = row.getInstant("created_at");
+                if (createdAt != null) {
+                    conversation.put("created_at", createdAt.toEpochMilli());
+                }
+                
+                conversations.add(conversation);
+            }
+            
+            System.out.println("✓ Retrieved " + conversations.size() + " conversations for user " + userId);
+            return conversations;
+            
+        } catch (Exception e) {
+            System.err.println("✗ Failed to retrieve conversations for user " + userId + ": " + e.getMessage());
+            throw new RuntimeException("Failed to query user conversations", e);
+        }
     }
 }

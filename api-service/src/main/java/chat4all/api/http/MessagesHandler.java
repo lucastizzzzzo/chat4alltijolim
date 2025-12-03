@@ -6,6 +6,7 @@ import chat4all.api.kafka.MessageProducer;
 import chat4all.api.messages.MessageValidator;
 import chat4all.api.metrics.MetricsRegistry;
 import chat4all.api.repository.FileRepository;
+import chat4all.api.resolver.IdentityResolver;
 import chat4all.api.util.JsonParser;
 import chat4all.api.util.ValidationException;
 import chat4all.shared.FileEvent;
@@ -74,6 +75,7 @@ public class MessagesHandler implements HttpHandler {
     private final MessageProducer producer;
     private final JwtAuthenticator authenticator;
     private final FileRepository fileRepository; // Phase 2: File attachment validation
+    private final IdentityResolver identityResolver; // Resolve username/whatsapp/instagram → user_id
     private final MetricsRegistry metricsRegistry; // Phase 3: Metrics
     
     /**
@@ -89,12 +91,14 @@ public class MessagesHandler implements HttpHandler {
      * @param producer Kafka producer
      * @param authenticator JWT authenticator
      * @param fileRepository File repository (Phase 2)
+     * @param identityResolver Identity resolver
      */
-    public MessagesHandler(MessageValidator validator, MessageProducer producer, JwtAuthenticator authenticator, FileRepository fileRepository) {
+    public MessagesHandler(MessageValidator validator, MessageProducer producer, JwtAuthenticator authenticator, FileRepository fileRepository, IdentityResolver identityResolver) {
         this.validator = validator;
         this.producer = producer;
         this.authenticator = authenticator;
         this.fileRepository = fileRepository;
+        this.identityResolver = identityResolver;
         this.metricsRegistry = MetricsRegistry.getInstance();
     }
     
@@ -173,7 +177,15 @@ public class MessagesHandler implements HttpHandler {
                 messageData.put("sender_id", authenticatedUserId);
             }
             
-            // 6. Validate message
+            // 6. Resolve recipient_id (username/whatsapp/instagram → user_id)
+            String recipientId = (String) messageData.get("recipient_id");
+            if (recipientId != null && !recipientId.isEmpty()) {
+                String resolvedRecipientId = identityResolver.resolveToUserId(recipientId);
+                messageData.put("recipient_id", resolvedRecipientId);
+                System.out.println("[MessagesHandler] Recipient resolved: " + recipientId + " → " + resolvedRecipientId);
+            }
+            
+            // 7. Validate message
             validator.validate(messageData);
             
             // 7. Phase 2: Handle file attachments (accept file_id with or without type="file")
