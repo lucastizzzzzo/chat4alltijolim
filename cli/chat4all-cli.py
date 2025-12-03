@@ -525,12 +525,12 @@ class Chat4AllCLI:
                     
                     print(f"{Colors.BOLD}[{timestamp.strftime('%Y-%m-%d %H:%M:%S')}]{Colors.ENDC}")
                     print(f"  {Colors.CYAN}De:{Colors.ENDC} {msg.get('sender_id')}")
-                    print(f"  {Colors.CYAN}Para:{Colors.ENDC} {msg.get('recipient_id')}")
+                    print(f"  {Colors.CYAN}Conversa:{Colors.ENDC} {msg.get('conversation_id')}")
                     print(f"  {Colors.CYAN}Mensagem:{Colors.ENDC} {msg.get('content')}")
                     print(f"  {Colors.CYAN}Status:{Colors.ENDC} {status_color}{msg.get('status')}{Colors.ENDC}")
                     
                     if msg.get('file_id'):
-                        print(f"  {Colors.CYAN}Arquivo:{Colors.ENDC} {msg.get('file_id')}")
+                        print(f"  {Colors.CYAN}📎 Arquivo:{Colors.ENDC} {msg.get('file_id')}")
                     
                     print(f"  {Colors.CYAN}ID:{Colors.ENDC} {msg.get('message_id')}")
                     print()
