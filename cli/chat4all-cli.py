@@ -210,69 +210,37 @@ class Chat4AllCLI:
             print(f"{Colors.RED}❌ Erro de conexão: {e}{Colors.ENDC}")
     
     def list_conversations(self):
-        """Lista conversas do usuário com auto-geração de IDs amigáveis"""
+        """Lista conversas do usuário"""
         if not self.token:
             print(f"{Colors.RED}❌ Você precisa autenticar primeiro (opção 2){Colors.ENDC}")
             return
         
         print(f"\n{Colors.BOLD}💬 Minhas Conversas{Colors.ENDC}")
         
-        try:
-            # Query Cassandra para pegar conversas únicas do usuário
-            # Por enquanto, vamos listar conversation_ids únicos das mensagens
-            response = requests.get(
-                f"{self.api_url}/v1/conversations",
-                headers={"Authorization": f"Bearer {self.token}"},
-                timeout=10
-            )
+        # Mostrar conversas criadas nesta sessão
+        if self.conversation_names:
+            print(f"\n{Colors.GREEN}✓ Conversas criadas nesta sessão:{Colors.ENDC}\n")
             
-            if response.status_code == 200:
-                data = response.json()
-                conversations = data.get("conversations", [])
+            for i, (conv_id, info) in enumerate(self.conversation_names.items(), 1):
+                name = info.get('name', 'Sem nome')
+                members = info.get('members', [])
+                created = info.get('created_at', '')
                 
-                if not conversations:
-                    print(f"{Colors.YELLOW}Nenhuma conversa encontrada.{Colors.ENDC}")
-                    print(f"\n{Colors.CYAN}Dica:{Colors.ENDC} Crie uma nova conversa (opção 4)")
-                    return
-                
-                print(f"{Colors.GREEN}✓ Encontradas {len(conversations)} conversas:{Colors.ENDC}\n")
-                
-                for i, conv in enumerate(conversations, 1):
-                    conv_id = conv.get('conversation_id', 'N/A')
-                    name = conv.get('name', conv_id[:20] + '...')
-                    msg_count = conv.get('message_count', 0)
-                    last_msg = conv.get('last_message_at', 'Nunca')
-                    
-                    print(f"{Colors.BOLD}{i}.{Colors.ENDC} {name}")
-                    print(f"   ID: {conv_id}")
-                    print(f"   Mensagens: {msg_count} | Última: {last_msg}")
-                    print()
-            else:
-                # Fallback: listar IDs únicos de conversas das mensagens
-                print(f"{Colors.YELLOW}Endpoint /v1/conversations não disponível.{Colors.ENDC}")
-                print(f"{Colors.CYAN}Listando conversas a partir das mensagens...{Colors.ENDC}\n")
-                
-                # Buscar do Cassandra diretamente (gambiarra temporária)
-                self._list_conversations_from_messages()
-                
-        except requests.exceptions.RequestException as e:
-            print(f"{Colors.RED}❌ Erro de conexão: {e}{Colors.ENDC}")
-    
-    def _list_conversations_from_messages(self):
-        """Fallback: lista conversation_ids únicos das mensagens"""
-        print(f"{Colors.YELLOW}Buscando conversas no banco de dados...{Colors.ENDC}\n")
-        
-        # Mock: mostrar conversas conhecidas ou sugerir criar nova
-        print(f"{Colors.CYAN}Conversas recentes:{Colors.ENDC}")
-        print(f"  • festa (3 mensagens)")
-        print(f"  • conv_teste_001 (2 mensagens)")
-        print(f"  • conv_async_test_* (teste de resiliência)")
-        print()
-        print(f"{Colors.YELLOW}💡 Estas são conversas visíveis no sistema.{Colors.ENDC}")
-        print(f"{Colors.YELLOW}   Use a opção 4 para criar uma nova conversa.{Colors.ENDC}")
+                print(f"{Colors.BOLD}{i}.{Colors.ENDC} {name}")
+                print(f"   {Colors.CYAN}ID:{Colors.ENDC} {conv_id}")
+                if members:
+                    print(f"   {Colors.CYAN}Membros ({len(members)}):{Colors.ENDC}")
+                    for member in members[:5]:  # Mostrar até 5
+                        print(f"     • {member}")
+                    if len(members) > 5:
+                        print(f"     ... e mais {len(members) - 5}")
+                print()
+        else:
+            print(f"\n{Colors.YELLOW}Nenhuma conversa criada nesta sessão.{Colors.ENDC}")
+            print(f"{Colors.CYAN}💡 Use a opção 4 para criar uma nova conversa!{Colors.ENDC}\n")
     
     def create_conversation(self):
-        """Cria nova conversa com ID gerado automaticamente"""
+        """Cria nova conversa com ID gerado automaticamente e opção de adicionar membros"""
         if not self.token:
             print(f"{Colors.RED}❌ Você precisa autenticar primeiro (opção 2){Colors.ENDC}")
             return
@@ -292,12 +260,37 @@ class Chat4AllCLI:
         
         print(f"\n{Colors.GREEN}✓ ID gerado automaticamente:{Colors.ENDC} {Colors.BOLD}{conv_id}{Colors.ENDC}")
         
+        # Perguntar se quer adicionar membros
+        add_members = input(f"\n{Colors.CYAN}Adicionar membros agora? (s/N):{Colors.ENDC} ").strip().lower()
+        
+        members = []
+        if add_members == 's':
+            print(f"\n{Colors.CYAN}💡 Digite os IDs dos membros (formato: instagram:@usuario ou whatsapp:+55...):{Colors.ENDC}")
+            print(f"{Colors.CYAN}   Digite 'fim' quando terminar{Colors.ENDC}\n")
+            
+            while True:
+                member = input(f"{Colors.CYAN}Membro {len(members) + 1} (ou 'fim'):{Colors.ENDC} ").strip()
+                if member.lower() == 'fim':
+                    break
+                if member:
+                    members.append(member)
+                    print(f"{Colors.GREEN}  ✓ Adicionado: {member}{Colors.ENDC}")
+        
         # Salvar na memória para uso posterior
         self.current_conversation = conv_id
+        self.conversation_names[conv_id] = {
+            'name': conv_name,
+            'members': members,
+            'created_at': datetime.now().isoformat()
+        }
         
-        print(f"\n{Colors.CYAN}Conversa criada!{Colors.ENDC}")
-        print(f"  Nome: {Colors.BOLD}{conv_name}{Colors.ENDC}")
-        print(f"  ID: {conv_id}")
+        print(f"\n{Colors.GREEN}✅ Conversa criada com sucesso!{Colors.ENDC}")
+        print(f"  {Colors.BOLD}Nome:{Colors.ENDC} {conv_name}")
+        print(f"  {Colors.BOLD}ID:{Colors.ENDC} {conv_id}")
+        if members:
+            print(f"  {Colors.BOLD}Membros:{Colors.ENDC} {len(members)}")
+            for m in members:
+                print(f"    • {m}")
         print(f"\n{Colors.YELLOW}💡 Agora você pode enviar mensagens nesta conversa (opção 5){Colors.ENDC}")
         print(f"{Colors.YELLOW}   O ID foi selecionado automaticamente.{Colors.ENDC}")
     
@@ -481,18 +474,20 @@ class Chat4AllCLI:
             print(f"{Colors.RED}❌ Erro: {e}{Colors.ENDC}")
     
     def list_messages(self):
-        """Lista mensagens de uma conversa"""
+        """Lista mensagens de uma conversa ou de todas as conversas"""
         if not self.token:
             print(f"{Colors.RED}❌ Você precisa autenticar primeiro (opção 1){Colors.ENDC}")
             return
         
         print(f"\n{Colors.BOLD}💬 Listar Mensagens{Colors.ENDC}")
         
-        conversation_id = input(f"{Colors.CYAN}Conversation ID:{Colors.ENDC} ").strip()
-        limit = input(f"{Colors.CYAN}Limite (padrão 10):{Colors.ENDC} ").strip() or "10"
+        conversation_id = input(f"{Colors.CYAN}Conversation ID (deixe vazio para ver TODAS):{Colors.ENDC} ").strip()
+        limit = input(f"{Colors.CYAN}Limite por conversa (padrão 10):{Colors.ENDC} ").strip() or "10"
         
+        # Se não especificar conversation_id, mostra mensagem instrucional
         if not conversation_id:
-            print(f"{Colors.RED}❌ Conversation ID é obrigatório{Colors.ENDC}")
+            print(f"\n{Colors.YELLOW}📋 Mostrando mensagens de TODAS as suas conversas...{Colors.ENDC}\n")
+            self._show_recent_conversations()
             return
         
         try:
@@ -539,6 +534,23 @@ class Chat4AllCLI:
                 print(f"{Colors.RED}❌ Erro ao listar: {response.status_code}{Colors.ENDC}")
         except requests.exceptions.RequestException as e:
             print(f"{Colors.RED}❌ Erro de conexão: {e}{Colors.ENDC}")
+    
+    def _show_recent_conversations(self):
+        """Mostra conversas recentes com mensagens"""
+        print(f"{Colors.YELLOW}💡 Dica: Use a opção 3 para ver a lista de conversas primeiro{Colors.ENDC}\n")
+        print(f"{Colors.CYAN}Conversas recentes que você criou nesta sessão:{Colors.ENDC}\n")
+        
+        if self.conversation_names:
+            for conv_id, info in self.conversation_names.items():
+                print(f"{Colors.BOLD}• {info.get('name', conv_id)}{Colors.ENDC}")
+                print(f"  ID: {conv_id}")
+                members = info.get('members', [])
+                if members:
+                    print(f"  Membros: {', '.join(members[:3])}")
+                print()
+        else:
+            print(f"{Colors.YELLOW}Nenhuma conversa criada nesta sessão.{Colors.ENDC}")
+            print(f"{Colors.CYAN}Use a opção 4 para criar uma nova conversa!{Colors.ENDC}")
     
     def mark_as_read(self):
         """Marca mensagem como lida"""
@@ -892,7 +904,10 @@ class Chat4AllCLI:
             threading.Thread(target=ping_thread, daemon=True).start()
         
         # Criar WebSocketApp
-        ws_url = f"{self.websocket_url}/notifications?token={self.token}"
+        # WebSocket precisa do user_id na URL
+        ws_url = f"{self.websocket_url}?userId={self.current_user_id}"
+        print(f"{Colors.CYAN}Conectando ao WebSocket: {ws_url}{Colors.ENDC}")
+        
         self.ws = websocket.WebSocketApp(
             ws_url,
             on_message=on_message,
